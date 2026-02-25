@@ -7,7 +7,7 @@
 
 <!-- FIREWALL: DROP IPv4 -->
 <decoder name="mikrotik-fw-drop-ipv4-parent">
-  <prematch type="pcre2">DROP : IPv4</prematch>
+  <prematch type="pcre2">^DROP : IPv4</prematch>
 </decoder>
 <decoder name="mikrotik-fw-drop-ipv4">
   <parent>mikrotik-fw-drop-ipv4-parent</parent>
@@ -17,7 +17,7 @@
 
 <!-- FIREWALL: DROP IPv6 -->
 <decoder name="mikrotik-fw-drop-ipv6-parent">
-  <prematch type="pcre2">DROP : IPv6</prematch>
+  <prematch type="pcre2">^DROP : IPv6</prematch>
 </decoder>
 <decoder name="mikrotik-fw-drop-ipv6">
   <parent>mikrotik-fw-drop-ipv6-parent</parent>
@@ -27,7 +27,7 @@
 
 <!-- FIREWALL: invalid forward -->
 <decoder name="mikrotik-fw-invalid-parent">
-  <prematch type="pcre2">invalid forward:</prematch>
+  <prematch type="pcre2">^invalid forward:</prematch>
 </decoder>
 <decoder name="mikrotik-fw-invalid">
   <parent>mikrotik-fw-invalid-parent</parent>
@@ -37,7 +37,7 @@
 
 <!-- AUTH: user login/logout -->
 <decoder name="mikrotik-login-parent">
-  <prematch type="pcre2">user \S+ logged</prematch>
+  <prematch type="pcre2">^user \S+ logged</prematch>
 </decoder>
 <decoder name="mikrotik-login">
   <parent>mikrotik-login-parent</parent>
@@ -47,7 +47,7 @@
 
 <!-- DHCP: server sending ack/offer -->
 <decoder name="mikrotik-dhcp-send-parent">
-  <prematch type="pcre2">dhcp\d+.+sending</prematch>
+  <prematch type="pcre2">^dhcp\d+.+sending</prematch>
 </decoder>
 <decoder name="mikrotik-dhcp-send">
   <parent>mikrotik-dhcp-send-parent</parent>
@@ -57,7 +57,7 @@
 
 <!-- DHCP: received request/discover -->
 <decoder name="mikrotik-dhcp-recv-parent">
-  <prematch type="pcre2">dhcp\d+ received</prematch>
+  <prematch type="pcre2">^dhcp\d+ received</prematch>
 </decoder>
 <decoder name="mikrotik-dhcp-recv">
   <parent>mikrotik-dhcp-recv-parent</parent>
@@ -67,7 +67,7 @@
 
 <!-- DHCP: lease bound/extending -->
 <decoder name="mikrotik-dhcp-lease-parent">
-  <prematch type="pcre2">lease </prematch>
+  <prematch type="pcre2">^lease </prematch>
 </decoder>
 <decoder name="mikrotik-dhcp-lease">
   <parent>mikrotik-dhcp-lease-parent</parent>
@@ -77,7 +77,7 @@
 
 <!-- DHCP: removing (lease expiry) -->
 <decoder name="mikrotik-dhcp-removing-parent">
-  <prematch type="pcre2">removing </prematch>
+  <prematch type="pcre2">^removing </prematch>
 </decoder>
 <decoder name="mikrotik-dhcp-removing">
   <parent>mikrotik-dhcp-removing-parent</parent>

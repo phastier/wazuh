@@ -111,11 +111,51 @@
     <group>unifi,admin,access,authentication,</group>
   </rule>
 
-  <!-- Network CEF catch-all -->
+  <!-- Network CEF catch-all (base for children) -->
   <rule id="100344" level="4">
     <decoded_as>unifi-network-cef-parent</decoded_as>
     <description>UniFi Network: CEF event - $(action)</description>
     <group>unifi,network,</group>
+  </rule>
+
+  <!-- Wired Client Connected -->
+  <rule id="100345" level="3">
+    <if_sid>100344</if_sid>
+    <match>Wired Client Connected</match>
+    <description>UniFi: Wired client connected</description>
+    <group>unifi,wired,connection,</group>
+  </rule>
+
+  <!-- Wired Client Disconnected -->
+  <rule id="100346" level="3">
+    <if_sid>100344</if_sid>
+    <match>Wired Client Disconnected</match>
+    <description>UniFi: Wired client disconnected</description>
+    <group>unifi,wired,disconnection,</group>
+  </rule>
+
+  <!-- Device Updated (firmware) -->
+  <rule id="100347" level="5">
+    <if_sid>100344</if_sid>
+    <match>Device Updated</match>
+    <description>UniFi: Device firmware updated</description>
+    <group>unifi,device,update,</group>
+  </rule>
+
+  <!-- UPS Battery Power In Use - CRITICAL -->
+  <rule id="100348" level="10">
+    <if_sid>100344</if_sid>
+    <match>UPS Battery Power In Use</match>
+    <description>UniFi: UPS on battery power - AC power lost!</description>
+    <group>unifi,ups,power,alert,</group>
+  </rule>
+
+  <!-- UPS AC Power Restored -->
+  <rule id="100349" level="5">
+    <if_sid>100344</if_sid>
+    <match>UPS AC Power Restored</match>
+    <description>UniFi: UPS AC power restored</description>
+    <group>unifi,ups,power,</group>
   </rule>
 
   <!-- System (suppress) -->
