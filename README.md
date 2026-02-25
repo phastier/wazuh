@@ -1,23 +1,26 @@
-# Wazuh Decoders & Rules for Ubiquiti UniFi and MikroTik RouterOS
+# Wazuh Custom Decoders & Rules for Network Infrastructure
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max)** and **MikroTik RouterOS 7.x** devices, providing comprehensive log decoding, field extraction, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max)**, **MikroTik RouterOS 7.x**, and **Fortinet FortiGate** devices, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 Developed and tested on **Wazuh 4.14.3** by [Astier Consulting](https://www.astier-consulting.fr) — Apple/IT consulting with 30 years of datacenter management experience.
 
 ## Why this project?
 
-When we set out to integrate our UniFi and MikroTik infrastructure into Wazuh, we found that:
+When we set out to integrate our network infrastructure into Wazuh, we found that:
 
 - The **BNC community rules** for UniFi (`0999-bnc-unifi-rules.xml`) are outdated and reference decoder names that no longer exist
 - There were **no working decoders** for MikroTik RouterOS 7.x with BSD syslog format
 - UniFi CEF events (WiFi client tracking, admin access) were **not decoded at all**
+- Fortinet built-in decoders work well, but **without tuning, mDNS/Bonjour noise drowns out real alerts** — especially in Apple-heavy environments
 - Documentation on Wazuh PCRE2 limitations was scattered and incomplete
 
-This repository provides production-tested decoders and rules that actually work.
+This repository provides production-tested decoders and rules that actually work, along with noise suppression tuning for real-world mixed environments.
 
 ## Features
 
 ### MikroTik RouterOS 7.x
+Custom decoders and rules — nothing usable existed for RouterOS 7.x BSD syslog.
+
 - **Firewall**: DROP IPv4/IPv6, invalid forward, INPUT protection
 - **DHCP**: Server operations (discover, offer, request, ack, lease, removal)
 - **Authentication**: Login/logout with external IP detection
@@ -25,6 +28,8 @@ This repository provides production-tested decoders and rules that actually work
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1133 (External Remote Services), T1110 (Brute Force)
 
 ### Ubiquiti UniFi (UDM Pro Max)
+Custom decoders and rules — the existing BNC community rules are broken.
+
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
 - **Protect**: Smart detection (person/vehicle/animal), motion events, intrusion correlation
@@ -32,14 +37,25 @@ This repository provides production-tested decoders and rules that actually work
 - **Admin access**: Management interface access with MITRE mapping
 - **Noise suppression**: ubios-udapi-server, DPI stats, system events filtered at level 0
 
+### Fortinet FortiGate
+Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work well). The focus here is **noise suppression and VPN monitoring** — in environments with Apple devices, Bonjour/mDNS generates thousands of deny logs per minute that bury real security events.
+
+- **mDNS/LLMNR suppression**: Filters out the massive volume of UDP/5353 and UDP/5355 deny logs typical in Apple/HomeKit/Bonjour environments
+- **UniFi discovery suppression**: Filters UDP/10001 broadcast noise
+- **VPN IPsec monitoring**: Alerts on denied traffic through site-to-site tunnels (routing issues, unauthorized access attempts)
+- **System events**: Performance stats, AV database updates, disk log rotation
+- **Correlation**: Repeated VPN denies trigger higher-level alerts for investigation
+
 ## Architecture
 ```
-MikroTik CCR2004 ──┐
-                    ├──► Syslog UDP/514 ──► Wazuh Server (rsyslog → analysisd)
-UniFi UDM Pro Max ──┘
+MikroTik CCR2004 ──────┐
+                        │
+UniFi UDM Pro Max ──────┼──► Syslog UDP/514 ──► Wazuh Server (rsyslog → analysisd)
+                        │
+Fortinet FortiGate ─────┘
 ```
 
-Both devices send BSD syslog format. Wazuh's pre-decoder extracts timestamp and hostname before our custom decoders process the message payload.
+MikroTik and UniFi send BSD syslog format. FortiGate uses its native key=value syslog format. Wazuh's pre-decoder extracts timestamp and hostname before custom decoders process the message payload.
 
 ## Key technical learnings
 
@@ -57,6 +73,8 @@ These are hard-won lessons from building these integrations:
 
 6. **Rule hierarchy matters** — Use `<if_sid>` for child rules. Without it, catch-all rules at the same level may match before specific ones.
 
+7. **Fortinet noise in Apple environments** — A single Apple TV or HomePod can generate 2000+ mDNS deny logs per minute on a FortiGate. Use level 0 rules in Wazuh to suppress noise while preserving archives for forensics.
+
 ## Installation
 
 ### 1. Copy decoders
@@ -71,14 +89,15 @@ cp decoders/unifi.xml /var/ossec/etc/decoders/
 ```bash
 cp rules/mikrotik_rules.xml /var/ossec/etc/rules/
 cp rules/unifi_rules.xml /var/ossec/etc/rules/
+# Only if you have a FortiGate:
+cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
 
 ### 3. Set permissions
 ```bash
 chown wazuh:wazuh /var/ossec/etc/decoders/mikrotik_custom.xml
 chown wazuh:wazuh /var/ossec/etc/decoders/ubiquiti.xml
-chown wazuh:wazuh /var/ossec/etc/rules/mikrotik_rules.xml
-chown wazuh:wazuh /var/ossec/etc/rules/unifi_rules.xml
+chown wazuh:wazuh /var/ossec/etc/rules/*.xml
 chmod 660 /var/ossec/etc/decoders/*.xml /var/ossec/etc/rules/*.xml
 ```
 
@@ -111,6 +130,18 @@ Navigate to **Settings → System → Activity Logging (Syslog)**:
 - Port: `514`
 - Contents: Gateway, Access Points, Switches, Admin Activity, Clients, Security Detections, Triggers, Devices, Updates, VPN, Firewall Default Policy
 
+### Fortinet FortiGate
+The FortiGate should be configured to send syslog to your Wazuh server. No special format is needed — Wazuh's built-in decoders handle FortiGate's native key=value format. Our custom rules layer on top for noise suppression and enhanced alerting.
+```
+config log syslogd setting
+    set status enable
+    set server "<WAZUH_IP>"
+    set port 514
+    set facility local7
+    set source-ip "<FORTIGATE_IP>"
+end
+```
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -133,10 +164,14 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
 | 100340-100344 | UniFi | WiFi & Network CEF (connect, disconnect, roam, admin) |
 | 100350 | UniFi | System suppression |
+| 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
+| 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
+| 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
+| 100430 | FortiGate | Correlation (repeated VPN denies) |
 
 ## Decoded fields
 
-### MikroTik WiFi/Firewall
+### MikroTik Firewall
 | Field | Content | Example |
 |-------|---------|---------|
 | `srcip` | Source IP | `192.168.1.100` |
@@ -158,11 +193,21 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `data` | RSSI or duration | `-41` / `2m` |
 | `action` | Network name | `LAN` |
 
+### FortiGate (built-in decoder fields)
+Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`, `srcport`, `dstport`, `action`, `policyid`, `service`, `srcintf`, `dstintf`, `devname`, `logid`, `level`, and more. Our custom rules add context through enhanced descriptions that surface VPN tunnel names and traffic patterns.
+
 ## Testing
 
 Use `wazuh-logtest` to validate decoders and rules:
 ```bash
-echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203.0.113.1 DST:192.168.0.100 PROTO:TCP SPT:12345 DPT:443 (ACK PSH)' | /var/ossec/bin/wazuh-logtest
+# MikroTik DROP
+echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203.0.113.1 DST:192.168.1.100 PROTO:TCP SPT:12345 DPT:443 (ACK PSH)' | /var/ossec/bin/wazuh-logtest
+
+# UniFi WiFi Connected
+echo 'Feb 25 11:04:19 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.1.85|400|WiFi Client Connected|1|UNIFIcategory=Client Devices UNIFIconnectedToDeviceName=AP-Bureau UNIFIclientAlias=iPhone UNIFIclientIp=192.168.1.100 UNIFIclientMac=aa:bb:cc:dd:ee:01 UNIFIwifiName=MySSID UNIFIwifiBand=6e UNIFIWiFiRssi=-45 UNIFInetworkName=LAN' | /var/ossec/bin/wazuh-logtest
+
+# FortiGate mDNS (should be suppressed - level 0)
+echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="0001000014" type="traffic" subtype="local" level="notice" srcip=fe80::1 dstip=ff02::fb action="deny" service="udp/5353"' | /var/ossec/bin/wazuh-logtest
 ```
 
 ## Tested environment
@@ -170,12 +215,20 @@ echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203
 - Wazuh 4.14.3 (3-VM cluster: server, dashboard, indexer)
 - MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x
 - Ubiquiti UDM Pro Max running UniFi Network 10.1.85
+- Fortinet FortiGate 60E running FortiOS 7.x
 - Ubuntu 24.04 / Proxmox
 - Syslog transport: UDP/514 via rsyslog
 
+## Roadmap
+
+- [ ] JAMF Protect & Security Cloud integration
+- [ ] Fortinet VPN tunnel state monitoring (up/down)
+- [ ] UniFi threat/IDS event decoding
+- [ ] Dashboard templates for OpenSearch/Kibana
+
 ## Contributing
 
-PRs welcome! If you have decoders/rules for other devices (Fortinet, JAMF, etc.), feel free to contribute.
+PRs welcome! If you have decoders/rules for other devices, feel free to contribute.
 
 ## License
 

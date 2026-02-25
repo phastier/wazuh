@@ -1,0 +1,88 @@
+<!--
+  Fortinet FortiGate Custom Rules for Wazuh
+  Astier Consulting - Feb 2026
+  Rule IDs: 100400-100499
+  Built-in rules: 81600-81650 (0391-fortigate_rules.xml)
+-->
+<group name="fortigate,">
+
+  <!-- ==================== -->
+  <!-- NOISE SUPPRESSION    -->
+  <!-- ==================== -->
+
+  <!-- mDNS/LLMNR deny IPv6 - massive noise in Apple/Bonjour environments -->
+  <rule id="100400" level="0">
+    <if_sid>81618</if_sid>
+    <match>service="udp/5353"|service="udp/5355"</match>
+    <description>Fortigate: mDNS/LLMNR deny (suppressed - Bonjour noise)</description>
+    <group>fortigate,noise,</group>
+  </rule>
+
+  <!-- UniFi device discovery broadcast -->
+  <rule id="100401" level="0">
+    <if_sid>81618</if_sid>
+    <match>service="udp/10001"</match>
+    <description>Fortigate: UniFi discovery broadcast (suppressed)</description>
+    <group>fortigate,noise,</group>
+  </rule>
+
+  <!-- ==================== -->
+  <!-- VPN / IPSEC          -->
+  <!-- ==================== -->
+
+  <!-- VPN IPsec deny - traffic blocked on S2S tunnels -->
+  <rule id="100410" level="6">
+    <if_sid>81618</if_sid>
+    <match>vpntype="ipsecvpn"</match>
+    <description>Fortigate: VPN IPsec traffic denied - $(srcip) to $(dstip) via $(dstintf)</description>
+    <group>fortigate,vpn,deny,</group>
+  </rule>
+
+  <!-- VPN events -->
+  <rule id="100411" level="5">
+    <if_sid>81602</if_sid>
+    <match>subtype="vpn"</match>
+    <description>Fortigate: VPN event - $(action)</description>
+    <group>fortigate,vpn,</group>
+  </rule>
+
+  <!-- ==================== -->
+  <!-- SYSTEM EVENTS        -->
+  <!-- ==================== -->
+
+  <!-- Performance stats -->
+  <rule id="100420" level="3">
+    <if_sid>81602</if_sid>
+    <match>action="perf-stats"</match>
+    <description>Fortigate: Performance stats - CPU=$(cpu) MEM=$(mem) Sessions=$(totalsession)</description>
+    <group>fortigate,system,performance,</group>
+  </rule>
+
+  <!-- Disk log rotation -->
+  <rule id="100421" level="4">
+    <if_sid>81602</if_sid>
+    <match>logdesc="Disk log file deleted"</match>
+    <description>Fortigate: Disk log rotation</description>
+    <group>fortigate,system,disk,</group>
+  </rule>
+
+  <!-- FortiSandbox AV update -->
+  <rule id="100422" level="3">
+    <if_sid>81602</if_sid>
+    <match>FortiSandbox AV database updated</match>
+    <description>Fortigate: AV database updated</description>
+    <group>fortigate,system,update,</group>
+  </rule>
+
+  <!-- ==================== -->
+  <!-- CORRELATION          -->
+  <!-- ==================== -->
+
+  <!-- Multiple VPN denies from same source -->
+  <rule id="100430" level="8" frequency="10" timeframe="60">
+    <if_matched_sid>100410</if_matched_sid>
+    <description>Fortigate: Repeated VPN IPsec denies - possible routing issue or unauthorized access</description>
+    <group>fortigate,vpn,alert,</group>
+  </rule>
+
+</group>
