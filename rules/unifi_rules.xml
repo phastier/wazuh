@@ -1,0 +1,128 @@
+<!--
+  UniFi UDM Pro Max Rules for Wazuh
+  Astier Consulting - Feb 2026
+  Rule IDs: 100300-100399
+-->
+<group name="unifi,">
+
+  <!-- FIREWALL -->
+  <rule id="100300" level="3">
+    <decoded_as>unifi-udm-pro-se</decoded_as>
+    <description>UniFi: Firewall event</description>
+    <group>unifi,firewall,</group>
+  </rule>
+
+  <rule id="100301" level="6">
+    <if_sid>100300</if_sid>
+    <match>Drop|Reject|Block</match>
+    <description>UniFi: Firewall DROP/REJECT</description>
+    <group>unifi,firewall,drop,</group>
+  </rule>
+
+  <rule id="100302" level="0">
+    <if_sid>100300</if_sid>
+    <match>Allow All Traffic</match>
+    <description>UniFi: Firewall Allow All (suppressed)</description>
+    <group>unifi,firewall,allow,</group>
+  </rule>
+
+  <!-- PROTECT -->
+  <rule id="100310" level="5">
+    <decoded_as>ubiquiti</decoded_as>
+    <match>smartDetectZone</match>
+    <description>UniFi Protect: Smart detection - $(data.action)</description>
+    <group>unifi,protect,smartdetect,</group>
+  </rule>
+
+  <rule id="100311" level="3">
+    <decoded_as>ubiquiti</decoded_as>
+    <match>sensorMotion</match>
+    <description>UniFi Protect: Motion detected</description>
+    <group>unifi,protect,motion,</group>
+  </rule>
+
+  <rule id="100312" level="4">
+    <decoded_as>ubiquiti</decoded_as>
+    <description>UniFi Protect: Event - $(data.action)</description>
+    <group>unifi,protect,</group>
+  </rule>
+
+  <rule id="100315" level="8" frequency="10" timeframe="60">
+    <if_matched_sid>100310</if_matched_sid>
+    <description>UniFi Protect: Multiple smart detections - possible intrusion</description>
+    <group>unifi,protect,smartdetect,alert,</group>
+  </rule>
+
+  <!-- DHCP -->
+  <rule id="100320" level="3">
+    <decoded_as>unifi-udm-pro-dhcp</decoded_as>
+    <description>UniFi: DHCP event</description>
+    <group>unifi,dhcp,</group>
+  </rule>
+
+  <rule id="100321" level="6">
+    <if_sid>100320</if_sid>
+    <match>no address range available</match>
+    <description>UniFi: DHCP pool exhaustion</description>
+    <group>unifi,dhcp,exhaustion,</group>
+  </rule>
+
+  <!-- Suppress noise -->
+  <rule id="100330" level="0">
+    <decoded_as>unifi-udm-pro-services</decoded_as>
+    <description>UniFi: System service (suppressed)</description>
+    <group>unifi,system,</group>
+  </rule>
+
+  <rule id="100331" level="0">
+    <decoded_as>unifi-udm-pro-dpi</decoded_as>
+    <description>UniFi: DPI stats (suppressed)</description>
+    <group>unifi,dpi,</group>
+  </rule>
+
+  <!-- WiFi Connected (enriched) -->
+  <rule id="100340" level="3">
+    <decoded_as>unifi-wifi-connected-parent</decoded_as>
+    <description>UniFi: WiFi connected - $(dstuser) on $(system_name) via $(extra_data) [$(srcip)]</description>
+    <group>unifi,wifi,connection,</group>
+  </rule>
+
+  <!-- WiFi Disconnected (enriched) -->
+  <rule id="100341" level="3">
+    <decoded_as>unifi-wifi-disconnected-parent</decoded_as>
+    <description>UniFi: WiFi disconnected - $(dstuser) from $(system_name) via $(extra_data) [duration=$(data)]</description>
+    <group>unifi,wifi,disconnection,</group>
+  </rule>
+
+  <!-- WiFi Roamed (enriched) -->
+  <rule id="100342" level="3">
+    <decoded_as>unifi-wifi-roamed-parent</decoded_as>
+    <description>UniFi: WiFi roamed - $(dstuser) from $(url) to $(extra_data) on $(system_name) [$(srcip)]</description>
+    <group>unifi,wifi,roaming,</group>
+  </rule>
+
+  <!-- Admin Accessed -->
+  <rule id="100343" level="5">
+    <decoded_as>unifi-admin-accessed-parent</decoded_as>
+    <description>UniFi Network: Admin access</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>unifi,admin,access,authentication,</group>
+  </rule>
+
+  <!-- Network CEF catch-all -->
+  <rule id="100344" level="4">
+    <decoded_as>unifi-network-cef-parent</decoded_as>
+    <description>UniFi Network: CEF event - $(action)</description>
+    <group>unifi,network,</group>
+  </rule>
+
+  <!-- System (suppress) -->
+  <rule id="100350" level="0">
+    <decoded_as>unifi-system-parent</decoded_as>
+    <description>UniFi: System event (suppressed)</description>
+    <group>unifi,system,</group>
+  </rule>
+
+</group>

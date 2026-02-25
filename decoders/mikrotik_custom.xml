@@ -1,0 +1,97 @@
+<!--
+  MikroTik RouterOS Custom Decoders for Wazuh
+  Astier Consulting - Feb 2026
+  Note: Wazuh PCRE2 engine supports only one child decoder per parent.
+  Note: pre-decoder extracts hostname "MikroTik", so prematch sees content AFTER hostname.
+-->
+
+<!-- FIREWALL: DROP IPv4 -->
+<decoder name="mikrotik-fw-drop-ipv4-parent">
+  <prematch type="pcre2">DROP : IPv4</prematch>
+</decoder>
+<decoder name="mikrotik-fw-drop-ipv4">
+  <parent>mikrotik-fw-drop-ipv4-parent</parent>
+  <regex type="pcre2">DROP : IPv4 (\S+) .+?: in:(\S+) out:\(?([^),]+)\)?, connection-state:(\S+) src-mac ([0-9A-Fa-f:]+), proto (\S+)(?: \(([^)]+)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
+  <order>action, srcintf, dstintf, status, extra_data, protocol, data, srcip, srcport, dstip, dstport, id</order>
+</decoder>
+
+<!-- FIREWALL: DROP IPv6 -->
+<decoder name="mikrotik-fw-drop-ipv6-parent">
+  <prematch type="pcre2">DROP : IPv6</prematch>
+</decoder>
+<decoder name="mikrotik-fw-drop-ipv6">
+  <parent>mikrotik-fw-drop-ipv6-parent</parent>
+  <regex type="pcre2">DROP : IPv6 (\S+) .+?: in:(\S+) out:\(?([^),]+)\)?, connection-state:(\S+) src-mac ([0-9A-Fa-f:]+), proto (\S+)(?: \(([^)]+)\))?, \[([a-f0-9:]+)\]:(\d+)->\[([a-f0-9:]+)\]:(\d+), len (\d+)</regex>
+  <order>action, srcintf, dstintf, status, extra_data, protocol, data, srcip, srcport, dstip, dstport, id</order>
+</decoder>
+
+<!-- FIREWALL: invalid forward -->
+<decoder name="mikrotik-fw-invalid-parent">
+  <prematch type="pcre2">invalid forward:</prematch>
+</decoder>
+<decoder name="mikrotik-fw-invalid">
+  <parent>mikrotik-fw-invalid-parent</parent>
+  <regex type="pcre2">invalid forward: in:(\S+) out:(\S+), connection-state:(\S+) src-mac ([0-9A-Fa-f:]+), proto (\S+)(?: \(([^)]+)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
+  <order>srcintf, dstintf, status, extra_data, protocol, data, srcip, srcport, dstip, dstport, id</order>
+</decoder>
+
+<!-- AUTH: user login/logout -->
+<decoder name="mikrotik-login-parent">
+  <prematch type="pcre2">user \S+ logged</prematch>
+</decoder>
+<decoder name="mikrotik-login">
+  <parent>mikrotik-login-parent</parent>
+  <regex type="pcre2">user (\S+) logged (in|out) from (\S+) via (\S+)</regex>
+  <order>srcuser, action, srcip, protocol</order>
+</decoder>
+
+<!-- DHCP: server sending ack/offer -->
+<decoder name="mikrotik-dhcp-send-parent">
+  <prematch type="pcre2">dhcp\d+.+sending</prematch>
+</decoder>
+<decoder name="mikrotik-dhcp-send">
+  <parent>mikrotik-dhcp-send-parent</parent>
+  <regex type="pcre2">dhcp\d+ on (\S+) sending (\S+) with id \d+ from (\S+):\d+ \([0-9A-Fa-f:]+\) to (\S+):\d+ \(([0-9A-Fa-f:]+)\)</regex>
+  <order>srcintf, action, srcip, dstip, extra_data</order>
+</decoder>
+
+<!-- DHCP: received request/discover -->
+<decoder name="mikrotik-dhcp-recv-parent">
+  <prematch type="pcre2">dhcp\d+ received</prematch>
+</decoder>
+<decoder name="mikrotik-dhcp-recv">
+  <parent>mikrotik-dhcp-recv-parent</parent>
+  <regex type="pcre2">dhcp\d+ received (\S+) id (\d+) from (\S+) '([^']+)'</regex>
+  <order>action, id, srcip, extra_data</order>
+</decoder>
+
+<!-- DHCP: lease bound/extending -->
+<decoder name="mikrotik-dhcp-lease-parent">
+  <prematch type="pcre2">lease </prematch>
+</decoder>
+<decoder name="mikrotik-dhcp-lease">
+  <parent>mikrotik-dhcp-lease-parent</parent>
+  <regex type="pcre2">lease (.+)</regex>
+  <order>action</order>
+</decoder>
+
+<!-- DHCP: removing (lease expiry) -->
+<decoder name="mikrotik-dhcp-removing-parent">
+  <prematch type="pcre2">removing </prematch>
+</decoder>
+<decoder name="mikrotik-dhcp-removing">
+  <parent>mikrotik-dhcp-removing-parent</parent>
+  <regex type="pcre2">removing (\d+\.\d+\.\d+\.\d+) ([0-9A-Fa-f:]+)\s*(.*)</regex>
+  <order>dstip, extra_data, dstuser</order>
+</decoder>
+
+<!-- SYSTEM: catch-all for other MikroTik messages (ping, test, Class-Id, etc.) -->
+<decoder name="mikrotik-system-parent">
+  <prematch type="pcre2">^(?:ping |test |Class-Id )</prematch>
+</decoder>
+<decoder name="mikrotik-system">
+  <parent>mikrotik-system-parent</parent>
+  <regex type="pcre2">(.+)</regex>
+  <order>action</order>
+</decoder>
+

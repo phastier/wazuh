@@ -1,0 +1,136 @@
+<!--
+  MikroTik RouterOS Rules for Wazuh
+  Astier Consulting - Feb 2026
+  Rule IDs: 100200-100299
+-->
+<group name="mikrotik,">
+
+  <!-- ================================ -->
+  <!-- FIREWALL RULES                   -->
+  <!-- ================================ -->
+
+  <rule id="100200" level="3">
+    <decoded_as>mikrotik-fw-drop-ipv4-parent</decoded_as>
+    <description>MikroTik: Firewall DROP IPv4 - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>mikrotik,firewall,drop,</group>
+  </rule>
+
+  <rule id="100201" level="3">
+    <decoded_as>mikrotik-fw-drop-ipv6-parent</decoded_as>
+    <description>MikroTik: Firewall DROP IPv6 - $(protocol) $(srcip) -> $(dstip)</description>
+    <group>mikrotik,firewall,drop,ipv6,</group>
+  </rule>
+
+  <rule id="100202" level="4">
+    <decoded_as>mikrotik-fw-invalid-parent</decoded_as>
+    <description>MikroTik: Invalid forward - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>mikrotik,firewall,invalid,</group>
+  </rule>
+
+  <!-- DROP INPUT: traffic directed at the router itself -->
+  <rule id="100203" level="6">
+    <if_sid>100200</if_sid>
+    <match>INPUT</match>
+    <description>MikroTik: Firewall DROP INPUT (traffic to router) - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>mikrotik,firewall,drop,input,</group>
+  </rule>
+
+  <!-- High frequency DROP from same source -->
+  <rule id="100210" level="8" frequency="20" timeframe="60">
+    <if_matched_sid>100200</if_matched_sid>
+    <same_srcip />
+    <description>MikroTik: Multiple firewall DROPs from $(srcip) - possible scan</description>
+    <group>mikrotik,firewall,attack,</group>
+  </rule>
+
+  <rule id="100211" level="8" frequency="20" timeframe="60">
+    <if_matched_sid>100202</if_matched_sid>
+    <same_srcip />
+    <description>MikroTik: Multiple invalid forwards from $(srcip)</description>
+    <group>mikrotik,firewall,attack,</group>
+  </rule>
+
+  <!-- ================================ -->
+  <!-- AUTHENTICATION RULES             -->
+  <!-- ================================ -->
+
+  <rule id="100220" level="5">
+    <decoded_as>mikrotik-login-parent</decoded_as>
+    <match>logged in</match>
+    <description>MikroTik: User '$(srcuser)' logged in from $(srcip) via $(protocol)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>mikrotik,authentication,login,</group>
+  </rule>
+
+
+  <!-- User logout -->
+  <rule id="100223" level="3">
+    <decoded_as>mikrotik-login-parent</decoded_as>
+    <match>logged out</match>
+    <description>MikroTik: User '$(srcuser)' logged out from $(srcip) via $(protocol)</description>
+    <group>mikrotik,authentication,logout,</group>
+  </rule>
+
+  <!-- Login from non-RFC1918 address -->
+  <rule id="100221" level="10">
+    <if_sid>100220</if_sid>
+    <regex type="pcre2">logged in from (?!10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)</regex>
+    <description>MikroTik: Login from EXTERNAL IP $(srcip) by '$(srcuser)' via $(protocol)</description>
+    <mitre>
+      <id>T1133</id>
+    </mitre>
+    <group>mikrotik,authentication,login,external,</group>
+  </rule>
+
+  <!-- Multiple logins -->
+  <rule id="100222" level="8" frequency="5" timeframe="120">
+    <if_matched_sid>100220</if_matched_sid>
+    <same_srcip />
+    <description>MikroTik: Multiple login attempts from $(srcip)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>mikrotik,authentication,brute_force,</group>
+  </rule>
+
+  <!-- ================================ -->
+  <!-- DHCP RULES                       -->
+  <!-- ================================ -->
+
+  <rule id="100230" level="3">
+    <decoded_as>mikrotik-dhcp-send-parent</decoded_as>
+    <description>MikroTik: DHCP $(action) to $(dstip) on $(srcintf)</description>
+    <group>mikrotik,dhcp,</group>
+  </rule>
+
+  <rule id="100231" level="3">
+    <decoded_as>mikrotik-dhcp-recv-parent</decoded_as>
+    <description>MikroTik: DHCP $(action) received</description>
+    <group>mikrotik,dhcp,</group>
+  </rule>
+
+  <rule id="100232" level="3">
+    <decoded_as>mikrotik-dhcp-lease-parent</decoded_as>
+    <description>MikroTik: DHCP lease event</description>
+    <group>mikrotik,dhcp,lease,</group>
+  </rule>
+
+  <rule id="100233" level="4">
+    <decoded_as>mikrotik-dhcp-removing-parent</decoded_as>
+    <description>MikroTik: DHCP lease removed - $(dstip) $(dstuser)</description>
+    <group>mikrotik,dhcp,lease_removal,</group>
+  </rule>
+
+  <!-- ================================ -->
+  <!-- SYSTEM RULES                     -->
+  <!-- ================================ -->
+
+  <rule id="100240" level="3">
+    <decoded_as>mikrotik-system-parent</decoded_as>
+    <description>MikroTik: System event</description>
+    <group>mikrotik,system,</group>
+  </rule>
+
+</group>
