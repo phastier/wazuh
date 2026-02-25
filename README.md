@@ -32,9 +32,12 @@ Custom decoders and rules — the existing BNC community rules are broken.
 
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
-- **Protect**: Smart detection (person/vehicle/animal), motion events, intrusion correlation
+- **Protect**: Smart detection (person/vehicle/animal/license plate), motion, tamper, loiter, device disconnect, door sensor open/close, intrusion correlation
 - **DHCP**: Pool exhaustion alerts, lease tracking
 - **Admin access**: Management interface access with MITRE mapping
+- **Wired tracking**: Client connected/disconnected on switches with port and link speed details
+- **Device management**: Firmware update alerts with version tracking
+- **UPS monitoring**: Battery power and AC restore events (level 10 critical alert)
 - **Noise suppression**: ubios-udapi-server, DPI stats, system events filtered at level 0
 
 ### Fortinet FortiGate
@@ -73,7 +76,9 @@ These are hard-won lessons from building these integrations:
 
 6. **Rule hierarchy matters** — Use `<if_sid>` for child rules. Without it, catch-all rules at the same level may match before specific ones.
 
-7. **Fortinet noise in Apple environments** — A single Apple TV or HomePod can generate 2000+ mDNS deny logs per minute on a FortiGate. Use level 0 rules in Wazuh to suppress noise while preserving archives for forensics.
+7. **Anchor all prematches with `^`** — Generic prematches like `lease ` can match unexpected content (e.g., "Please" contains "lease"). Always anchor with `^` to match only at the start of the decoded message.
+
+8. **Fortinet noise in Apple environments** — A single Apple TV or HomePod can generate 2000+ mDNS deny logs per minute on a FortiGate. Use level 0 rules in Wazuh to suppress noise while preserving archives for forensics.
 
 ## Installation
 
@@ -162,7 +167,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100310-100315 | UniFi | Protect (smart detect, motion, intrusion) |
 | 100320-100321 | UniFi | DHCP (events, pool exhaustion) |
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
-| 100340-100344 | UniFi | WiFi & Network CEF (connect, disconnect, roam, admin) |
+| 100340-100349 | UniFi | WiFi, Wired, Network CEF, Device Updates, UPS power |
 | 100350 | UniFi | System suppression |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
@@ -195,6 +200,31 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 
 ### FortiGate (built-in decoder fields)
 Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`, `srcport`, `dstport`, `action`, `policyid`, `service`, `srcintf`, `dstintf`, `devname`, `logid`, `level`, and more. Our custom rules add context through enhanced descriptions that surface VPN tunnel names and traffic patterns.
+
+## UniFi CEF Event IDs
+
+These are the UniFi Network and Protect CEF event IDs we have identified and mapped:
+
+| ID | Event | Source |
+|----|-------|--------|
+| 215 | UPS Battery Power In Use | Network |
+| 216 | UPS AC Power Restored | Network |
+| 400 | WiFi Client Connected | Network |
+| 401 | WiFi Client Disconnected | Network |
+| 402 | WiFi Client Roamed | Network |
+| 403 | Wired Client Connected | Network |
+| 404 | Wired Client Disconnected | Network |
+| 510 | Device Updated | Network |
+| 544 | Admin Accessed | Network |
+| 2008 | Access | Protect |
+| 2108 | Update | Protect |
+| 2150 | Device Disconnected | Protect |
+| 2161 | Smart Detect Zone / Tamper / Loiter | Protect |
+| 2201 | Sensor Motion | Protect |
+| 2202 | Sensor Opened | Protect |
+| 2203 | Sensor Closed | Protect |
+
+Contributions welcome if you discover additional event IDs!
 
 ## Testing
 
