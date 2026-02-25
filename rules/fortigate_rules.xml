@@ -33,7 +33,7 @@
   <!-- VPN IPsec deny - traffic blocked on S2S tunnels -->
   <rule id="100410" level="6">
     <if_sid>81618</if_sid>
-    <match>vpntype="ipsecvpn"</match>
+    <match>vpntype="ipsecvpn" action="deny"</match>
     <description>Fortigate: VPN IPsec traffic denied - $(srcip) to $(dstip) via $(dstintf)</description>
     <group>fortigate,vpn,deny,</group>
   </rule>
