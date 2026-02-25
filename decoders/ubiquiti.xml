@@ -214,17 +214,6 @@
   <order>id, action, status</order>
 </decoder>
 
-<!-- Catch-all for other UniFi Network CEF events -->
-<decoder name="unifi-network-cef-parent">
-  <program_name>^CEF</program_name>
-  <prematch type="pcre2">Ubiquiti\|UniFi Network</prematch>
-</decoder>
-<decoder name="unifi-network-cef">
-  <parent>unifi-network-cef-parent</parent>
-  <regex type="pcre2">\|(\d+)\|([^|]+)\|(\d+)\|</regex>
-  <order>id, action, status</order>
-</decoder>
-
 
 <!-- UDM system catch-all (sudo, earlyoom, syslog-ng, etc.) -->
 <decoder name="unifi-system-parent">

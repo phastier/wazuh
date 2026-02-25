@@ -667,3 +667,40 @@
 	<regex type="pcre2">UNIFImclagGroup=([^\s].*?)\s*(?=[A-Za-z0-9_.:-]+=|$)</regex>
 	<order>unifi_mclag_group</order>
 </decoder>
+
+<!-- ============================================ -->
+<!-- UniFi Network CEF: UPS Power events          -->
+<!-- ID 215: Battery In Use, ID 216: Restored     -->
+<!-- ============================================ -->
+<decoder name="unifi-ups-battery-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|215\|</prematch>
+</decoder>
+<decoder name="unifi-ups-battery">
+  <parent>unifi-ups-battery-parent</parent>
+  <regex type="pcre2">UNIFIdeviceName=([^\s][\w\s]*?\w)\s+UNIFI\S+\s.*?UNIFIdeviceIp=([\d.]+).*?UNIFIpowerRemaining=([\d.]+%)\s.*?msg=(.*)</regex>
+  <order>extra_data, srcip, data, action</order>
+</decoder>
+
+<decoder name="unifi-ups-restored-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|216\|</prematch>
+</decoder>
+<decoder name="unifi-ups-restored">
+  <parent>unifi-ups-restored-parent</parent>
+  <regex type="pcre2">UNIFIdeviceName=([^\s][\w\s]*?\w)\s+UNIFI\S+\s.*?UNIFIdeviceIp=([\d.]+).*?msg=(.*)</regex>
+  <order>extra_data, srcip, action</order>
+</decoder>
+
+
+<!-- Catch-all for other UniFi Network CEF events -->
+<!-- MUST be AFTER specific decoders (UPS, WiFi, etc.) -->
+<decoder name="unifi-network-cef-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network</prematch>
+</decoder>
+<decoder name="unifi-network-cef">
+  <parent>unifi-network-cef-parent</parent>
+  <regex type="pcre2">\|(\d+)\|([^|]+)\|(\d+)\|</regex>
+  <order>id, action, status</order>
+</decoder>
