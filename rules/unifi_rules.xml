@@ -231,4 +231,42 @@
     <group>unifi,network,infrastructure,alert,</group>
   </rule>
 
+  <!-- ================================ -->
+  <!-- UNIFI OS EVENTS                  -->
+  <!-- ================================ -->
+
+  <!-- UniFi OS catch-all (parent) -->
+  <rule id="100360" level="4">
+    <decoded_as>unifi-os-cef-parent</decoded_as>
+    <description>UniFi OS: CEF event - $(action)</description>
+    <group>unifi,os,</group>
+  </rule>
+
+  <!-- UniFi OS: Admin accessed -->
+  <rule id="100361" level="5">
+    <if_sid>100360</if_sid>
+    <match>Admin Accessed</match>
+    <description>UniFi OS: Admin accessed console</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>unifi,os,admin,audit,</group>
+  </rule>
+
+  <!-- UniFi OS: Application update available -->
+  <rule id="100362" level="3">
+    <if_sid>100360</if_sid>
+    <match>Application Update Available</match>
+    <description>UniFi OS: Application update available - $(action)</description>
+    <group>unifi,os,update,</group>
+  </rule>
+
+  <!-- UniFi OS: Application updated -->
+  <rule id="100363" level="5">
+    <if_sid>100360</if_sid>
+    <match>Application Updated</match>
+    <description>UniFi OS: Application updated - $(action)</description>
+    <group>unifi,os,update,audit,</group>
+  </rule>
+
 </group>
