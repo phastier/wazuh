@@ -693,6 +693,20 @@
 </decoder>
 
 
+<!-- ============================================ -->
+<!-- UniFi OS CEF events                          -->
+<!-- Admin access, application updates             -->
+<!-- ============================================ -->
+<decoder name="unifi-os-cef-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi OS</prematch>
+</decoder>
+<decoder name="unifi-os-cef">
+  <parent>unifi-os-cef-parent</parent>
+  <regex type="pcre2">\|(\d+)\|([^|]+)\|(\d+)\|</regex>
+  <order>id, action, status</order>
+</decoder>
+
 <!-- Catch-all for other UniFi Network CEF events -->
 <!-- MUST be AFTER specific decoders (UPS, WiFi, etc.) -->
 <decoder name="unifi-network-cef-parent">
