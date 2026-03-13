@@ -1,6 +1,6 @@
 <!--
   UniFi UDM Pro Max Rules for Wazuh
-  Astier Consulting - Feb 2026
+  Astier Consulting - Feb/Mar 2026
   Rule IDs: 100300-100399
 -->
 <group name="unifi,">
@@ -26,27 +26,49 @@
     <group>unifi,firewall,allow,</group>
   </rule>
 
-  <!-- PROTECT -->
-  <rule id="100310" level="5">
-    <decoded_as>ubiquiti</decoded_as>
-    <match>smartDetectZone</match>
-    <description>UniFi Protect: Smart detection - $(data.action)</description>
-    <group>unifi,protect,smartdetect,</group>
-  </rule>
-
-  <rule id="100311" level="3">
-    <decoded_as>ubiquiti</decoded_as>
-    <match>sensorMotion</match>
-    <description>UniFi Protect: Motion detected</description>
-    <group>unifi,protect,motion,</group>
-  </rule>
-
+  <!-- PROTECT: catch-all (parent for all Protect events) -->
   <rule id="100312" level="4">
     <decoded_as>ubiquiti</decoded_as>
     <description>UniFi Protect: Event - $(data.action)</description>
     <group>unifi,protect,</group>
   </rule>
 
+  <!-- Protect: Smart detection -->
+  <rule id="100310" level="5">
+    <if_sid>100312</if_sid>
+    <match>smartDetectZone|smartDetectLoiterZone</match>
+    <description>UniFi Protect: Smart detection - $(data.action)</description>
+    <group>unifi,protect,smartdetect,</group>
+  </rule>
+
+  <!-- Protect: Sensor motion -->
+  <rule id="100311" level="3">
+    <if_sid>100312</if_sid>
+    <match>sensorMotion</match>
+    <description>UniFi Protect: Sensor motion detected</description>
+    <group>unifi,protect,motion,</group>
+  </rule>
+
+  <!-- Protect: Camera motion -->
+  <rule id="100313" level="3">
+    <if_sid>100312</if_sid>
+    <match>recorded motion</match>
+    <description>UniFi Protect: Camera motion detected</description>
+    <group>unifi,protect,motion,camera,</group>
+  </rule>
+
+  <!-- Protect: Admin activity -->
+  <rule id="100316" level="5">
+    <if_sid>100312</if_sid>
+    <match>adminActivity</match>
+    <description>UniFi Protect: Admin activity</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>unifi,protect,admin,audit,</group>
+  </rule>
+
+  <!-- Protect: Multiple smart detections correlation -->
   <rule id="100315" level="8" frequency="10" timeframe="60">
     <if_matched_sid>100310</if_matched_sid>
     <description>UniFi Protect: Multiple smart detections - possible intrusion</description>
@@ -101,7 +123,7 @@
     <group>unifi,wifi,roaming,</group>
   </rule>
 
-  <!-- Admin Accessed -->
+  <!-- Admin Accessed (via dedicated decoder) -->
   <rule id="100343" level="5">
     <decoded_as>unifi-admin-accessed-parent</decoded_as>
     <description>UniFi Network: Admin access</description>
@@ -145,7 +167,6 @@
   <!-- UPS Battery Power In Use - CRITICAL -->
   <rule id="100348" level="10">
     <decoded_as>unifi-ups-battery-parent</decoded_as>
-    <match>UPS Battery Power In Use</match>
     <description>UniFi: UPS on battery power ($(data)) - $(extra_data) [$(srcip)]</description>
     <group>unifi,ups,power,alert,</group>
   </rule>
@@ -153,7 +174,6 @@
   <!-- UPS AC Power Restored -->
   <rule id="100349" level="5">
     <decoded_as>unifi-ups-restored-parent</decoded_as>
-    <match>UPS AC Power Restored</match>
     <description>UniFi: UPS AC power restored - $(extra_data) [$(srcip)]</description>
     <group>unifi,ups,power,</group>
   </rule>
@@ -163,6 +183,52 @@
     <decoded_as>unifi-system-parent</decoded_as>
     <description>UniFi: System event (suppressed)</description>
     <group>unifi,system,</group>
+  </rule>
+
+  <!-- Network Accessed (audit, via catch-all) -->
+  <rule id="100351" level="3">
+    <if_sid>100344</if_sid>
+    <match>Network Accessed</match>
+    <description>UniFi Network: Console accessed</description>
+    <group>unifi,admin,access,audit,</group>
+  </rule>
+
+  <!-- Config Created (audit) -->
+  <rule id="100352" level="5">
+    <if_sid>100344</if_sid>
+    <match>Config Created</match>
+    <description>UniFi Network: Configuration created - $(action)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>unifi,config,audit,</group>
+  </rule>
+
+  <!-- Config Removed (audit) -->
+  <rule id="100353" level="6">
+    <if_sid>100344</if_sid>
+    <match>Config Removed</match>
+    <description>UniFi Network: Configuration removed - $(action)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>unifi,config,audit,</group>
+  </rule>
+
+  <!-- Network/Software Updated -->
+  <rule id="100354" level="5">
+    <if_sid>100344</if_sid>
+    <match>Network Updated</match>
+    <description>UniFi Network: Software updated - $(action)</description>
+    <group>unifi,software,update,</group>
+  </rule>
+
+  <!-- Poor AP Link Speed (infra alert) -->
+  <rule id="100355" level="6">
+    <if_sid>100344</if_sid>
+    <match>Poor AP Link Speed</match>
+    <description>UniFi Network: Poor AP link speed detected</description>
+    <group>unifi,network,infrastructure,alert,</group>
   </rule>
 
 </group>
