@@ -272,11 +272,11 @@ echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="00
 
 ## Tested environment
 
-- Wazuh 4.14.3 (3-VM cluster: server, dashboard, indexer)
-- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x
-- Ubiquiti UDM Pro Max running UniFi Network 10.2.93
+- Wazuh 4.14.3 (3-VM cluster: server, dashboard, indexer on Ubuntu 25.10)
+- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.22rc4
+- Ubiquiti UDM Pro Max (firmware 5.0.16) running UniFi Network 10.2.93 and UniFi Protect 7.0.85
 - Fortinet FortiGate 60E running FortiOS 7.x
-- Ubuntu 24.04 / Proxmox
+- Proxmox VE
 - Syslog transport: UDP/514 via rsyslog
 
 ## Roadmap
