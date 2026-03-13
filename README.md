@@ -32,12 +32,14 @@ Custom decoders and rules — the existing BNC community rules are broken.
 
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
-- **Protect**: Smart detection (person/vehicle/animal/license plate), motion, tamper, loiter, device disconnect, door sensor open/close, intrusion correlation
+- **Protect**: Smart detection (person/vehicle/animal/license plate), camera motion, sensor motion, tamper, loiter, device disconnect, door sensor open/close, admin activity, intrusion correlation
+- **Audit trail**: Configuration changes (created/removed), software updates, console access — essential for DORA/compliance
 - **DHCP**: Pool exhaustion alerts, lease tracking
 - **Admin access**: Management interface access with MITRE mapping
 - **Wired tracking**: Client connected/disconnected on switches with port and link speed details
 - **Device management**: Firmware update alerts with version tracking
-- **UPS monitoring**: Battery power and AC restore events (level 10 critical alert)
+- **UPS monitoring**: Battery power and AC restore events with battery percentage extraction (level 10 critical alert)
+- **Infrastructure alerts**: Poor AP link speed detection
 - **Noise suppression**: ubios-udapi-server, DPI stats, system events filtered at level 0
 
 ### Fortinet FortiGate
@@ -45,7 +47,7 @@ Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work we
 
 - **mDNS/LLMNR suppression**: Filters out the massive volume of UDP/5353 and UDP/5355 deny logs typical in Apple/HomeKit/Bonjour environments
 - **UniFi discovery suppression**: Filters UDP/10001 broadcast noise
-- **VPN IPsec monitoring**: Alerts on denied traffic through site-to-site tunnels (routing issues, unauthorized access attempts)
+- **VPN IPsec monitoring**: Alerts on denied traffic through site-to-site tunnels (routing issues, unauthorized access attempts). Filters on `action="deny"` to avoid false positives from legitimate ZTNA traffic
 - **System events**: Performance stats, AV database updates, disk log rotation
 - **Correlation**: Repeated VPN denies trigger higher-level alerts for investigation
 
@@ -79,6 +81,14 @@ These are hard-won lessons from building these integrations:
 7. **Anchor all prematches with `^`** — Generic prematches like `lease ` can match unexpected content (e.g., "Please" contains "lease"). Always anchor with `^` to match only at the start of the decoded message.
 
 8. **Fortinet noise in Apple environments** — A single Apple TV or HomePod can generate 2000+ mDNS deny logs per minute on a FortiGate. Use level 0 rules in Wazuh to suppress noise while preserving archives for forensics.
+
+9. **Catch-all rules must be parents, not siblings** — When multiple rules share the same `<decoded_as>` without `<match>`, the catch-all (no `<match>`) wins unpredictably over specific rules. Solution: make the catch-all the parent rule, and specific rules its children via `<if_sid>`. This pattern is used for both UniFi Protect (100312 as parent) and Network CEF (100344 as parent).
+
+10. **Avoid spaces in UDM hostname** — The BSD syslog pre-decoder splits on spaces. A hostname like `UDM Pro Max AC` gets truncated to `UDM`, breaking decoder matching for Protect events. Use hyphens instead: `UDM-Pro-Max-AC`.
+
+11. **Decoder order matters across files** — Wazuh loads decoder files alphabetically. A catch-all decoder in `ubiquiti.xml` will match before specific decoders in `unifi.xml`. Place specific decoders (UPS, WiFi) in the same file as the catch-all, or ensure they load first.
+
+12. **FortiGate VPN rule: always filter on action** — A rule matching `vpntype="ipsecvpn"` without `action="deny"` will flag all ZTNA/IPsec traffic (accept, close, client-rst) as "denied". Always combine VPN type with action filter.
 
 ## Installation
 
@@ -135,6 +145,8 @@ Navigate to **Settings → System → Activity Logging (Syslog)**:
 - Port: `514`
 - Contents: Gateway, Access Points, Switches, Admin Activity, Clients, Security Detections, Triggers, Devices, Updates, VPN, Firewall Default Policy
 
+> **Tip**: Avoid spaces in your UDM hostname (e.g., use `UDM-Pro-Max-AC` instead of `UDM Pro Max AC`). Spaces break the BSD syslog pre-decoder and cause Protect events to be misclassified.
+
 ### Fortinet FortiGate
 The FortiGate should be configured to send syslog to your Wazuh server. No special format is needed — Wazuh's built-in decoders handle FortiGate's native key=value format. Our custom rules layer on top for noise suppression and enhanced alerting.
 ```
@@ -164,11 +176,12 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100230-100233 | MikroTik | DHCP operations |
 | 100240 | MikroTik | System catch-all |
 | 100300-100302 | UniFi | Firewall (base, DROP, Allow suppressed) |
-| 100310-100315 | UniFi | Protect (smart detect, motion, intrusion) |
+| 100310-100316 | UniFi | Protect (smart detect, camera/sensor motion, admin activity, intrusion correlation) |
 | 100320-100321 | UniFi | DHCP (events, pool exhaustion) |
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
 | 100340-100349 | UniFi | WiFi, Wired, Network CEF, Device Updates, UPS power |
 | 100350 | UniFi | System suppression |
+| 100351-100355 | UniFi | Audit & infra (console access, config changes, software updates, AP link speed) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -198,6 +211,14 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `data` | RSSI or duration | `-41` / `2m` |
 | `action` | Network name | `LAN` |
 
+### UniFi UPS (enriched)
+| Field | Content | Example |
+|-------|---------|---------|
+| `extra_data` | UPS device name | `UPS Bureau Cave` |
+| `srcip` | UPS IP address | `192.168.0.40` |
+| `data` | Battery remaining | `93.0%` |
+| `action` | Full message | `UPS Bureau Cave has lost AC power...` |
+
 ### FortiGate (built-in decoder fields)
 Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`, `srcport`, `dstport`, `action`, `policyid`, `service`, `srcintf`, `dstintf`, `devname`, `logid`, `level`, and more. Our custom rules add context through enhanced descriptions that surface VPN tunnel names and traffic patterns.
 
@@ -215,14 +236,20 @@ These are the UniFi Network and Protect CEF event IDs we have identified and map
 | 403 | Wired Client Connected | Network |
 | 404 | Wired Client Disconnected | Network |
 | 510 | Device Updated | Network |
-| 544 | Admin Accessed | Network |
+| 544 | Admin Accessed / Network Accessed | Network |
+| 545 | Config Created | Network |
+| 549 | Config Removed | Network |
+| 563 | Poor AP Link Speed | Network |
+| 578 | Network Updated (software) | Network |
 | 2008 | Access | Protect |
 | 2108 | Update | Protect |
 | 2150 | Device Disconnected | Protect |
+| 2159 | Motion (camera) | Protect |
 | 2161 | Smart Detect Zone / Tamper / Loiter | Protect |
 | 2201 | Sensor Motion | Protect |
 | 2202 | Sensor Opened | Protect |
 | 2203 | Sensor Closed | Protect |
+| 2308 | Admin Activity | Protect |
 
 Contributions welcome if you discover additional event IDs!
 
@@ -236,6 +263,9 @@ echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203
 # UniFi WiFi Connected
 echo 'Feb 25 11:04:19 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.1.85|400|WiFi Client Connected|1|UNIFIcategory=Client Devices UNIFIconnectedToDeviceName=AP-Bureau UNIFIclientAlias=iPhone UNIFIclientIp=192.168.1.100 UNIFIclientMac=aa:bb:cc:dd:ee:01 UNIFIwifiName=MySSID UNIFIwifiBand=6e UNIFIWiFiRssi=-45 UNIFInetworkName=LAN' | /var/ossec/bin/wazuh-logtest
 
+# UniFi Config Created (audit)
+echo 'Mar 13 10:31:17 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.2.93|545|Config Created|5|UNIFIcategory=Audit msg=Network Application Update created RADIUS Profile' | /var/ossec/bin/wazuh-logtest
+
 # FortiGate mDNS (should be suppressed - level 0)
 echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="0001000014" type="traffic" subtype="local" level="notice" srcip=fe80::1 dstip=ff02::fb action="deny" service="udp/5353"' | /var/ossec/bin/wazuh-logtest
 ```
@@ -244,7 +274,7 @@ echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="00
 
 - Wazuh 4.14.3 (3-VM cluster: server, dashboard, indexer)
 - MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x
-- Ubiquiti UDM Pro Max running UniFi Network 10.1.85
+- Ubiquiti UDM Pro Max running UniFi Network 10.2.93
 - Fortinet FortiGate 60E running FortiOS 7.x
 - Ubuntu 24.04 / Proxmox
 - Syslog transport: UDP/514 via rsyslog
@@ -254,6 +284,7 @@ echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="00
 - [ ] JAMF Protect & Security Cloud integration
 - [ ] Fortinet VPN tunnel state monitoring (up/down)
 - [ ] UniFi threat/IDS event decoding
+- [ ] UniFi Config Modified audit events (not yet seen in CEF syslog)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing
