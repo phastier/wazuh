@@ -33,6 +33,7 @@ Custom decoders and rules — the existing BNC community rules are broken.
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
 - **Protect**: Smart detection (person/vehicle/animal/license plate), camera motion, sensor motion, tamper, loiter, device disconnect, door sensor open/close, admin activity, intrusion correlation
+- **OS**: Console access, application update notifications and tracking — covers the UniFi OS layer independently from Network and Protect
 - **Audit trail**: Configuration changes (created/removed), software updates, console access — essential for DORA/compliance
 - **DHCP**: Pool exhaustion alerts, lease tracking
 - **Admin access**: Management interface access with MITRE mapping
@@ -181,7 +182,8 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
 | 100340-100349 | UniFi | WiFi, Wired, Network CEF, Device Updates, UPS power |
 | 100350 | UniFi | System suppression |
-| 100351-100355 | UniFi | Audit & infra (console access, config changes, software updates, AP link speed) |
+| 100351-100355 | UniFi | Network audit & infra (console access, config changes, software updates, AP link speed) |
+| 100360-100363 | UniFi | OS events (console access, application update available/completed) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -224,7 +226,7 @@ Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`,
 
 ## UniFi CEF Event IDs
 
-These are the UniFi Network and Protect CEF event IDs we have identified and mapped:
+These are the UniFi Network, Protect, and OS CEF event IDs we have identified and mapped:
 
 | ID | Event | Source |
 |----|-------|--------|
@@ -241,6 +243,9 @@ These are the UniFi Network and Protect CEF event IDs we have identified and map
 | 549 | Config Removed | Network |
 | 563 | Poor AP Link Speed | Network |
 | 578 | Network Updated (software) | Network |
+| 1000 | Admin Accessed UniFi OS | OS |
+| 1100 | Application Update Available | OS |
+| 1102 | Application Updated | OS |
 | 2008 | Access | Protect |
 | 2108 | Update | Protect |
 | 2150 | Device Disconnected | Protect |
@@ -262,6 +267,9 @@ echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203
 
 # UniFi WiFi Connected
 echo 'Feb 25 11:04:19 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.1.85|400|WiFi Client Connected|1|UNIFIcategory=Client Devices UNIFIconnectedToDeviceName=AP-Bureau UNIFIclientAlias=iPhone UNIFIclientIp=192.168.1.100 UNIFIclientMac=aa:bb:cc:dd:ee:01 UNIFIwifiName=MySSID UNIFIwifiBand=6e UNIFIWiFiRssi=-45 UNIFInetworkName=LAN' | /var/ossec/bin/wazuh-logtest
+
+# UniFi OS Admin Accessed
+echo 'Mar 13 16:00:00 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi OS|5.0.16|1000|Admin Accessed UniFi OS|1|UNIFIhost=Host UNIFIadmin=Admin msg=Admin accessed the UniFi OS' | /var/ossec/bin/wazuh-logtest
 
 # UniFi Config Created (audit)
 echo 'Mar 13 10:31:17 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.2.93|545|Config Created|5|UNIFIcategory=Audit msg=Network Application Update created RADIUS Profile' | /var/ossec/bin/wazuh-logtest
@@ -285,6 +293,7 @@ echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="00
 - [ ] Fortinet VPN tunnel state monitoring (up/down)
 - [ ] UniFi threat/IDS event decoding
 - [ ] UniFi Config Modified audit events (not yet seen in CEF syslog)
+- [ ] UniFi AP direct logs (hostapd, kernel wlan events from access points)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing
