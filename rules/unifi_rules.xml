@@ -57,6 +57,14 @@
     <group>unifi,protect,motion,camera,</group>
   </rule>
 
+  <!-- Protect: Door/sensor opened (IoT category) -->
+  <rule id="100314" level="5">
+    <if_sid>100312</if_sid>
+    <match>sensorOpened</match>
+    <description>UniFi Protect: Door/sensor opened</description>
+    <group>unifi,protect,iot,sensor,</group>
+  </rule>
+
   <!-- Protect: Admin activity -->
   <rule id="100316" level="5">
     <if_sid>100312</if_sid>
@@ -229,6 +237,17 @@
     <match>Poor AP Link Speed</match>
     <description>UniFi Network: Poor AP link speed detected</description>
     <group>unifi,network,infrastructure,alert,</group>
+  </rule>
+
+  <!-- Config Modified (audit) - CEF ID 546 -->
+  <rule id="100356" level="5">
+    <if_sid>100344</if_sid>
+    <match>Config Modified</match>
+    <description>UniFi Network: Configuration modified - $(action)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>unifi,config,audit,</group>
   </rule>
 
   <!-- ================================ -->
