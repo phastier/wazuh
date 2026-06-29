@@ -223,11 +223,13 @@
     <group>unifi,system,</group>
   </rule>
 
-  <!-- Network Accessed (audit, via catch-all) -->
+  <!-- Network Accessed (admin console access, audit) -->
   <rule id="100351" level="3">
-    <if_sid>100344</if_sid>
-    <match>Network Accessed</match>
-    <description>UniFi Network: Console accessed</description>
+    <decoded_as>unifi-network-accessed-parent</decoded_as>
+    <description>UniFi Network: $(dstuser) accessed the console from $(srcip) via $(access_method)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
     <group>unifi,admin,access,audit,</group>
   </rule>
 
