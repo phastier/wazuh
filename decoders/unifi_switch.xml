@@ -1,0 +1,22 @@
+<!--
+  UniFi switch (USW) syslog decoders
+  Astier Consulting - https://www.astier-consulting.fr
+
+  Format: <swMAC12hex>,<model+ver>: [<facility>: ]<daemon>[pid]: <message>
+  e.g. f4e2c6ac9075,USW-Pro-Max-48-7.5.4+17029: mcad: mcad[883]: ui-ubus-utils...
+
+  Decode readably (daemon + message). NOTE: on hosts that also load the BNC
+  community UniFi decoders (bnc_unifi_decoders.xml), those define a `unifi-switch`
+  decoder that loads first and claims these lines, firing the generic OSSEC rule
+  1002 ("Unknown problem somewhere in the system"). Exclude the BNC decoders in
+  ossec.conf (<decoder_exclude>bnc_unifi_decoders.xml</decoder_exclude>) so this
+  decoder can run. (Clean installs without BNC need no change.)
+-->
+<decoder name="unifi-sw">
+  <prematch type="pcre2">^[0-9a-fA-F]{12},USW-\S+:\s</prematch>
+</decoder>
+<decoder name="unifi-sw-fields">
+  <parent>unifi-sw</parent>
+  <regex type="pcre2">^[0-9a-fA-F]{12},(\S+?):\s.*?(\S+?)(?:\[\d+\])+:\s*(.*)</regex>
+  <order>sw_model, sw_daemon, sw_message</order>
+</decoder>

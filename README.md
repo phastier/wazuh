@@ -235,6 +235,8 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100351-100356 | UniFi | Network audit & infra (console access, config created/modified/removed, software updates, AP link speed) |
 | 100360-100363 | UniFi | OS events (console access, application update available/completed) |
 | 100364-100367 | UniFi | Protect (camera tamper, smart audio detect, device connect/disconnect) |
+| 100368-100372 | UniFi | AP per-AP syslog (readable daemon+message, Wi-Fi client assoc/disassoc, fan/thermal telemetry + high-temp escalation) |
+| 100380 | UniFi | Switch per-switch syslog (readable daemon+message) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -267,6 +269,43 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `protocol` | WiFi band | `6e` |
 | `data` | RSSI or duration | `-41` / `2m` |
 | `action` | Network name | `LAN` |
+
+### UniFi AP — per-AP syslog
+| Field | Content | Example |
+|-------|---------|---------|
+| `ap_daemon` | Daemon that emitted the line | `syswrapper` / `wpa_supplicant` |
+| `ap_message` | Readable message body | `Trigger rrm scan(1): ...` |
+| `client_mac` | Wi-Fi client MAC (assoc/disassoc) | `aa:bb:cc:dd:ee:01` |
+| `ap_radio` | Radio interface | `wifi1ap2` |
+| `wifi_action` | Association state | `associated` / `disassociated` |
+| `ap_model` | AP model + firmware | `U6-IW-6.8.2+15592` |
+
+### UniFi AP — fan/thermal telemetry
+| Field | Content | Example |
+|-------|---------|---------|
+| `ap_temp` | Sensor temperature (°C) | `76` |
+| `sensor_zone` | Sensor zone | `zone3` |
+| `fan_speed` | Fan speed (%) | `0` |
+| `fan_rpm` | Fan RPM | `0` |
+| `pwm_set` / `pwm_actual` | Fan PWM set / actual | `63` / `55` |
+
+### UniFi Wired client (enriched)
+| Field | Content | Example |
+|-------|---------|---------|
+| `dstuser` | Client alias | `Living-Room-TV` |
+| `srcip` | Client IP | `192.168.20.37` |
+| `srcmac` | Client MAC | `aa:bb:cc:dd:ee:02` |
+| `switch_name` | Switch/AP it connected to | `USW-Flex-Office` |
+| `switch_port` | Port number | `2` |
+| `network` / `vlan` | Network name / VLAN id | `VLAN_IoT` / `200` |
+| `data` | Session duration (on disconnect) | `1h 52m` |
+
+### UniFi Switch — per-switch syslog
+| Field | Content | Example |
+|-------|---------|---------|
+| `sw_daemon` | Daemon that emitted the line | `mcad` |
+| `sw_message` | Readable message body | `ui-ubus-utils...: Failed to find ubus object` |
+| `sw_model` | Switch model + firmware | `USW-Pro-Max-48-7.5.4+17029` |
 
 ### UniFi UPS (enriched)
 | Field | Content | Example |
@@ -348,19 +387,22 @@ echo '[jdoe (ID: 5)] [DELETE] [API Client - Client Secret] [2026-06-29T10:02:00.
 
 ## Tested environment
 
-- Wazuh 4.14.3 (3-VM cluster: server, dashboard, indexer on Ubuntu 25.10)
-- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.22rc4
-- Ubiquiti UDM Pro Max (firmware 5.0.16) running UniFi Network 10.2.93 and UniFi Protect 7.0.85
+- Wazuh 4.14.5 (3-VM cluster: server, dashboard, indexer)
+- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x
+- Ubiquiti UDM Pro Max / UDM SE running UniFi Network 10.4–10.5 and UniFi Protect 7.x — plus access points (U6-IW, U7-Pro, UDB) and switches (USW-Pro-Max-48, USW-Flex 2.5G) on firmware 6.x–8.x
 - Fortinet FortiGate 60E running FortiOS 7.x
 - Proxmox VE
 - Syslog transport: UDP/514 via rsyslog
+
+> Versions move fast; these decoders are kept working across newer Wazuh, RouterOS and UniFi releases, so the exact versions above are a snapshot, not a hard requirement.
 
 ## Roadmap
 
 - [ ] JAMF Protect & Security Cloud integration
 - [ ] Fortinet VPN tunnel state monitoring (up/down)
 - [ ] UniFi threat/IDS event decoding
-- [x] UniFi AP direct logs — hostapd Wi-Fi client assoc/disassoc (`unifi_ap.xml`, rules 100368-100370); needs symantec `decoder_exclude` (see learning #15). Kernel/wlan events still TODO.
+- [x] UniFi AP direct logs — readable per-AP syslog (daemon+message), Wi-Fi client assoc/disassoc, fan/thermal telemetry (`unifi_ap.xml`, rules 100368-100372); needs symantec `decoder_exclude` (learning #15)
+- [x] UniFi switch direct logs — readable per-switch syslog (`unifi_switch.xml`, rule 100380; exclude BNC decoders if present)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing

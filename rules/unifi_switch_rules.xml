@@ -1,0 +1,13 @@
+<!--
+  UniFi switch (USW) rules for Wazuh
+  Astier Consulting - https://www.astier-consulting.fr
+  Rule IDs: 100380 | Decoder: decoders/unifi_switch.xml
+  Decode-everything-readably: generic switch events show "daemon: message".
+-->
+<group name="unifi,switch,">
+  <rule id="100380" level="3">
+    <decoded_as>unifi-sw</decoded_as>
+    <description>UniFi switch [$(sw_daemon)]: $(sw_message)</description>
+    <group>unifi,switch,</group>
+  </rule>
+</group>

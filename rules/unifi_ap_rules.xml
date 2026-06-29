@@ -18,13 +18,13 @@
   <rule id="100369" level="3">
     <decoded_as>unifi-ap-wifi</decoded_as>
     <field name="wifi_action">^associated$</field>
-    <description>UniFi AP: Wi-Fi client connected to a borne - client $(client_mac) [$(ap_radio)]</description>
+    <description>UniFi AP: Wi-Fi client connected - client $(client_mac) [$(ap_radio)]</description>
     <group>unifi,ap,wifi,connection,</group>
   </rule>
   <rule id="100370" level="3">
     <decoded_as>unifi-ap-wifi</decoded_as>
     <field name="wifi_action">^disassociated$</field>
-    <description>UniFi AP: Wi-Fi client disconnected from a borne - client $(client_mac) [$(ap_radio)]</description>
+    <description>UniFi AP: Wi-Fi client disconnected - client $(client_mac) [$(ap_radio)]</description>
     <group>unifi,ap,wifi,disconnection,</group>
   </rule>
 
