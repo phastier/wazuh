@@ -1,6 +1,6 @@
-# Wazuh Custom Decoders & Rules for Network Infrastructure
+# Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max)**, **MikroTik RouterOS 7.x**, and **Fortinet FortiGate** devices, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, and **Jamf Pro (on-prem MDM)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 Developed and tested on **Wazuh 4.14.3** by [Astier Consulting](https://www.astier-consulting.fr) — Apple/IT consulting with 30 years of datacenter management experience.
 
@@ -53,6 +53,19 @@ Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work we
 - **System events**: Performance stats, AV database updates, disk log rotation
 - **Correlation**: Repeated VPN denies trigger higher-level alerts for investigation
 
+### Jamf Pro (on-prem MDM)
+Custom decoders and rules for Jamf Pro's application logs — no community Wazuh decoders exist for these file-based logs. Jamf Pro does **not** write to syslog; logs are collected from the host with the Wazuh agent.
+
+- **Authentication** (`JSSAccess.log`): console & API logins (success/failure), logout, API token creation, password changes — with user, source IP and entry point (JSS console / Universal API / OAuth)
+- **Audit trail** (`JAMFChangeManagement.log`): full CRUD on every Jamf object (accounts, groups, policies, configuration profiles, scripts, MDM commands, settings…) with actor, action and object type
+- **Full audit visibility**: every event is decoded and surfaced — including READ access at a low level (3) with the object name extracted — so nothing is hidden by default; sensitive-object reads (level 5) and FileVault key access (level 12) are escalated. Reads are ~96% of the audit volume, so set rule `100511` to level 0 to suppress them once you have decided what you do not want to see.
+- **Sensitive object escalation**: admin **Account** changes (level 10), **API client / client secret** changes (level 12), **MDM commands** (Erase Device, Set Activation Lock…) (level 9), **security settings** (Jamf Protect, Conditional Access, Change Management, Push Certificate, SMTP) (level 8)
+- **FileVault recovery key (PRK) access** (level 12): detects an admin viewing a computer's FileVault Personal Recovery Key — Jamf logs this as an empty-object `READ` whose body carries `File Vault 2 ID` (requires multi-line collection)
+- **Object name extraction** (`jamf_object_name`): pulls the changed object's name from the multi-line body (e.g. which script/policy/profile)
+- **Brute force correlation**: repeated failed logins from the same source IP
+- **Instance install/upgrade tracking** (`jamf-pro-installer.log`): Jamf Pro upgrades, upgrade steps, disk-space warnings (level 5) and install failures (level 10) — the noisy `JAMFSoftwareServer.log` is intentionally *not* collected (99% INFO + a single recurring internal ERROR)
+- **MITRE ATT&CK**: T1110 (Brute Force), T1098 (Account Manipulation), T1555 (Credentials from Password Stores), T1562.001 / T1070 (Impair Defenses / Indicator Removal)
+
 ## Architecture
 ```
 MikroTik CCR2004 ──────┐
@@ -63,6 +76,8 @@ Fortinet FortiGate ─────┘
 ```
 
 MikroTik and UniFi send BSD syslog format. FortiGate uses its native key=value syslog format. Wazuh's pre-decoder extracts timestamp and hostname before custom decoders process the message payload.
+
+**Jamf Pro is collected differently**: it does not emit syslog, so its `JSSAccess.log` and `JAMFChangeManagement.log` (and `jamf-pro-installer.log`) are read directly on the Jamf Pro host by the Wazuh agent via `<localfile>` — there is no syslog pre-decoder, so the decoders match the raw file lines. See [Device configuration](#jamf-pro-on-prem).
 
 ## Key technical learnings
 
@@ -163,6 +178,25 @@ config log syslogd setting
 end
 ```
 
+### Jamf Pro (on-prem)
+Jamf Pro writes log4j files under `/usr/local/jss/logs/` — it does **not** send syslog. Install the Wazuh agent on the Jamf Pro host and add to `/var/ossec/etc/ossec.conf`:
+```xml
+<localfile>
+  <log_format>syslog</log_format>
+  <location>/usr/local/jss/logs/JSSAccess.log</location>
+</localfile>
+<localfile>
+  <log_format>multi-line-regex</log_format>
+  <location>/usr/local/jss/logs/JAMFChangeManagement.log</location>
+  <multiline_regex match="start" replace="no-replace">^\[</multiline_regex>
+</localfile>
+<localfile>
+  <log_format>syslog</log_format>
+  <location>/usr/local/jss/logs/jamf-pro-installer.log</location>
+</localfile>
+```
+`JAMFChangeManagement.log` is collected as **multi-line** (`match="start"` on the `^[` header) so each change is a single event carrying the header **plus** the detail body — i.e. the object name and the changed fields, not just the object type. Note that Jamf logs mostly metadata, but some changes (Configuration Profile payloads, script-content edits) include larger/sensitive blobs — tune at the agent or rule level if needed. Then restart the agent. In Jamf Pro, enable the audit trail under **Settings → System → Change Management → Use Log File** (directory `/usr/local/jss/logs`). The agent runs as root, so it can read both files regardless of their `jamftomcat` ownership.
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -191,6 +225,10 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
 | 100430 | FortiGate | Correlation (repeated VPN denies) |
+| 100500-100507 | Jamf Pro | Authentication (login, logout, token, failed login, password change, brute force) |
+| 100510-100516 | Jamf Pro | Change management (READ surfaced at low level + object name, sensitive objects + FileVault PRK escalated, create/update/delete) |
+| 100520-100524 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM command, security settings, audit log retention) |
+| 100530-100534 | Jamf Pro | Instance install/upgrade (upgrade steps, disk warning, install failure) |
 
 ## Decoded fields
 
@@ -282,6 +320,15 @@ echo 'Mar 14 08:16:22 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.2.93|546|Co
 
 # FortiGate mDNS (should be suppressed - level 0)
 echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="0001000014" type="traffic" subtype="local" level="notice" srcip=fe80::1 dstip=ff02::fb action="deny" service="udp/5353"' | /var/ossec/bin/wazuh-logtest
+
+# Jamf Pro: failed login (level 8)
+echo '2026-06-29 08:28:01,037: username=jdoe, status=Failed Login, ipAddress=192.0.2.10, entryPoint=JSS' | /var/ossec/bin/wazuh-logtest
+
+# Jamf Pro: admin account created (level 10)
+echo '[jdoe (ID: 5)] [CREATE] [Account] [2026-06-29T10:02:00.791+0200]' | /var/ossec/bin/wazuh-logtest
+
+# Jamf Pro: API client secret deleted (level 12, critical)
+echo '[jdoe (ID: 5)] [DELETE] [API Client - Client Secret] [2026-06-29T10:02:00.772+0200]' | /var/ossec/bin/wazuh-logtest
 ```
 
 ## Tested environment

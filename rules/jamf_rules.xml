@@ -1,0 +1,229 @@
+<!--
+  Jamf Pro (on-prem) Rules for Wazuh
+  Astier Consulting - 2026 - https://www.astier-consulting.fr
+  Rule IDs: 100500-100599
+  Decoders: decoders/jamf.xml  (jamf-access, jamf-change)
+
+  Levels: 0 = suppressed (noise), 3 = info, 4-7 = notable, 8-10 = important,
+          12 = critical. READ events (~96% of the audit volume) are suppressed
+          at level 0; CREATE/UPDATE/DELETE are surfaced, with higher severity
+          for sensitive object types (accounts, API secrets, MDM commands,
+          security settings).
+-->
+<group name="jamf,">
+
+  <!-- ============================================================ -->
+  <!-- AUTHENTICATION / ACCESS  (JSSAccess.log)                     -->
+  <!-- ============================================================ -->
+  <rule id="100500" level="3">
+    <decoded_as>jamf-access</decoded_as>
+    <description>Jamf Pro: access event - $(srcuser) [$(jamf_status)] via $(jamf_entrypoint) from $(srcip)</description>
+    <group>jamf,authentication,</group>
+  </rule>
+
+  <rule id="100501" level="3">
+    <if_sid>100500</if_sid>
+    <field name="jamf_status">^Successful Login$</field>
+    <description>Jamf Pro: successful login - $(srcuser) via $(jamf_entrypoint) from $(srcip)</description>
+    <group>jamf,authentication,authentication_success,</group>
+  </rule>
+
+  <rule id="100502" level="3">
+    <if_sid>100500</if_sid>
+    <field name="jamf_status">^Successful Logout$</field>
+    <description>Jamf Pro: logout - $(srcuser) from $(srcip)</description>
+    <group>jamf,authentication,</group>
+  </rule>
+
+  <rule id="100503" level="4">
+    <if_sid>100500</if_sid>
+    <field name="jamf_status">token creation$</field>
+    <description>Jamf Pro: API token created - $(srcuser) via $(jamf_entrypoint) from $(srcip)</description>
+    <group>jamf,authentication,api,</group>
+  </rule>
+
+  <rule id="100504" level="8">
+    <if_sid>100500</if_sid>
+    <field name="jamf_status">^Failed Login$</field>
+    <description>Jamf Pro: FAILED login - $(srcuser) via $(jamf_entrypoint) from $(srcip)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>jamf,authentication,authentication_failed,</group>
+  </rule>
+
+  <rule id="100505" level="8">
+    <if_sid>100500</if_sid>
+    <field name="jamf_status">^Failed token creation$</field>
+    <description>Jamf Pro: FAILED token creation - $(srcuser) from $(srcip)</description>
+    <group>jamf,authentication,authentication_failed,api,</group>
+  </rule>
+
+  <rule id="100506" level="10" frequency="6" timeframe="120">
+    <if_matched_sid>100504</if_matched_sid>
+    <same_source_ip />
+    <description>Jamf Pro: multiple failed logins from same source - possible brute force</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>jamf,authentication,authentication_failures,</group>
+  </rule>
+
+  <rule id="100507" level="8">
+    <if_sid>100500</if_sid>
+    <field name="jamf_entrypoint">Change Password</field>
+    <description>Jamf Pro: password change - $(srcuser) from $(srcip)</description>
+    <group>jamf,authentication,account_changed,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CHANGE MANAGEMENT / AUDIT  (JAMFChangeManagement.log)        -->
+  <!-- ============================================================ -->
+  <rule id="100510" level="3">
+    <decoded_as>jamf-change</decoded_as>
+    <description>Jamf Pro: change management - $(jamf_action) [$(jamf_object)] by $(srcuser)</description>
+    <group>jamf,audit,</group>
+  </rule>
+
+  <!-- Base READ surfaced at a low level (3) so all object access is visible.
+       Decode-everything stance: arbitrate later. Set to level 0 to suppress the
+       high-volume reads once you have decided what you do not want to see. -->
+  <rule id="100511" level="3">
+    <if_sid>100510</if_sid>
+    <field name="jamf_action">^READ$</field>
+    <description>Jamf Pro: read access - $(jamf_object) [$(jamf_object_name)] by $(srcuser)</description>
+    <group>jamf,audit,read,</group>
+  </rule>
+
+  <!-- Read access to a sensitive object is retained (ANSSI: access to sensitive
+       resources). Bulk reads of non-sensitive objects stay suppressed (100511). -->
+  <rule id="100515" level="5">
+    <if_sid>100511</if_sid>
+    <field name="jamf_object">^Account$|^API Client|Settings$|Conditional Access|Change Management|Push Certificate|Log Flushing</field>
+    <description>Jamf Pro: read access to sensitive object - $(jamf_object) by $(srcuser)</description>
+    <group>jamf,audit,read,sensitive,</group>
+  </rule>
+
+  <!-- FileVault recovery key (PRK) viewed: Jamf logs this as an empty-object READ
+       whose multi-line body carries "File Vault 2 ID". Critical - access to a
+       disk-encryption recovery secret. Requires multi-line collection. -->
+  <rule id="100516" level="12">
+    <if_sid>100511</if_sid>
+    <match>File Vault 2 ID</match>
+    <description>Jamf Pro: FileVault recovery key (PRK) accessed by $(srcuser)</description>
+    <mitre>
+      <id>T1555</id>
+    </mitre>
+    <group>jamf,audit,filevault,recovery_key,sensitive,</group>
+  </rule>
+
+  <rule id="100512" level="5">
+    <if_sid>100510</if_sid>
+    <field name="jamf_action">^CREATE$</field>
+    <description>Jamf Pro: object created - $(jamf_object) by $(srcuser)</description>
+    <group>jamf,audit,create,</group>
+  </rule>
+
+  <rule id="100513" level="5">
+    <if_sid>100510</if_sid>
+    <field name="jamf_action">^UPDATE$</field>
+    <description>Jamf Pro: object modified - $(jamf_object) by $(srcuser)</description>
+    <group>jamf,audit,update,</group>
+  </rule>
+
+  <rule id="100514" level="7">
+    <if_sid>100510</if_sid>
+    <field name="jamf_action">^DELETE$</field>
+    <description>Jamf Pro: object deleted - $(jamf_object) by $(srcuser)</description>
+    <group>jamf,audit,delete,</group>
+  </rule>
+
+  <!-- High-value object overrides (apply to CREATE/UPDATE/DELETE) -->
+  <rule id="100520" level="12">
+    <if_sid>100512,100513,100514</if_sid>
+    <field name="jamf_object">^API Client</field>
+    <description>Jamf Pro: API client / secret change - $(jamf_action) [$(jamf_object)] by $(srcuser)</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+    <group>jamf,audit,account_changed,authentication,</group>
+  </rule>
+
+  <rule id="100521" level="10">
+    <if_sid>100512,100513,100514</if_sid>
+    <field name="jamf_object">^Account$</field>
+    <description>Jamf Pro: admin account change - $(jamf_action) by $(srcuser)</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+    <group>jamf,audit,account_changed,</group>
+  </rule>
+
+  <rule id="100522" level="9">
+    <if_sid>100512,100513,100514</if_sid>
+    <field name="jamf_object">Command$</field>
+    <description>Jamf Pro: MDM command issued - $(jamf_object) by $(srcuser)</description>
+    <group>jamf,audit,mdm,command,</group>
+  </rule>
+
+  <rule id="100523" level="8">
+    <if_sid>100512,100513,100514</if_sid>
+    <field name="jamf_object">Settings$|Conditional Access|Change Management|Push Certificate|SMTP server</field>
+    <description>Jamf Pro: security setting change - $(jamf_action) [$(jamf_object)] by $(srcuser)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>jamf,audit,policy_changed,</group>
+  </rule>
+
+  <!-- Audit log retention / flushing change = potential anti-forensics
+       (ANSSI: modification des stratégies d'audit & effacement de journaux). -->
+  <rule id="100524" level="10">
+    <if_sid>100512,100513,100514</if_sid>
+    <field name="jamf_object">^Log Flushing$</field>
+    <description>Jamf Pro: audit log retention (Log Flushing) changed - $(jamf_action) by $(srcuser)</description>
+    <mitre>
+      <id>T1562.001</id>
+      <id>T1070</id>
+    </mitre>
+    <group>jamf,audit,policy_changed,log_retention,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- INSTANCE INSTALL / UPGRADE  (jamf-pro-installer.log)         -->
+  <!-- ============================================================ -->
+  <rule id="100530" level="3">
+    <decoded_as>jamf-installer</decoded_as>
+    <description>Jamf Pro installer: $(jamf_installer_msg)</description>
+    <group>jamf,installer,</group>
+  </rule>
+
+  <rule id="100531" level="7">
+    <if_sid>100530</if_sid>
+    <match>has been installed</match>
+    <description>Jamf Pro: instance installed/upgraded</description>
+    <group>jamf,installer,upgrade,</group>
+  </rule>
+
+  <rule id="100532" level="5">
+    <if_sid>100530</if_sid>
+    <match>Upgrading Tomcat|Stopping Tomcat for the upgrade|ROOT.war extracted</match>
+    <description>Jamf Pro installer: upgrade in progress - $(jamf_installer_msg)</description>
+    <group>jamf,installer,upgrade,</group>
+  </rule>
+
+  <rule id="100533" level="5">
+    <if_sid>100530</if_sid>
+    <match>Warning|disk space is below</match>
+    <description>Jamf Pro installer: warning - $(jamf_installer_msg)</description>
+    <group>jamf,installer,</group>
+  </rule>
+
+  <rule id="100534" level="10">
+    <if_sid>100530</if_sid>
+    <match>failed|Failed|FAILED|Error|ERROR|Unable</match>
+    <description>Jamf Pro installer: FAILURE - $(jamf_installer_msg)</description>
+    <group>jamf,installer,failure,</group>
+  </rule>
+
+</group>

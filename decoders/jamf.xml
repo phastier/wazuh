@@ -1,0 +1,61 @@
+<!--
+    Wazuh decoders for Jamf Pro (on-prem) application logs
+    Astier Consulting - 2026 - https://www.astier-consulting.fr
+    MIT License
+
+    Source files (collected by the Wazuh agent via <localfile>, log_format "syslog"):
+      /usr/local/jss/logs/JSSAccess.log             - console & API access (authentication)
+      /usr/local/jss/logs/JAMFChangeManagement.log  - audit trail: CRUD on every Jamf object
+
+    These are FILE logs (not syslog) -> no BSD pre-decoder strips a hostname; the
+    decoder matches the raw line. PCRE2 used throughout. Note: [^\]]+ is unreliable
+    in Wazuh PCRE2, so bracket fields are captured with non-greedy .+? / .*? instead.
+-->
+
+<!-- ============================================================= -->
+<!-- JSSAccess.log  (authentication / access)                      -->
+<!-- 2026-06-29 08:28:01,037: username=<u>, status=<s>,            -->
+<!--   ipAddress=<ip>, entryPoint=<e>                              -->
+<!-- ============================================================= -->
+<decoder name="jamf-access">
+  <prematch type="pcre2">username=\S+, status=.+, ipAddress=</prematch>
+</decoder>
+<decoder name="jamf-access">
+  <parent>jamf-access</parent>
+  <regex type="pcre2">username=(.+?), status=(.+?), ipAddress=(.+?), entryPoint=(.+?)\s*$</regex>
+  <order>srcuser, jamf_status, srcip, jamf_entrypoint</order>
+</decoder>
+
+<!-- ============================================================= -->
+<!-- JAMFChangeManagement.log  (audit trail header line)           -->
+<!-- [<actor> (ID: <id>)] [<ACTION>] [<ObjectType>] [<ISO8601>]    -->
+<!-- (indented detail lines and blank lines are not matched here)  -->
+<!-- ============================================================= -->
+<decoder name="jamf-change">
+  <prematch type="pcre2">^\[.+? \(ID: .+?\)\] \[</prematch>
+</decoder>
+<decoder name="jamf-change">
+  <parent>jamf-change</parent>
+  <regex type="pcre2">^\[(.+?) \(ID: (.+?)\)\] \[(.+?)\] \[(.*?)\] \[(.+?)\]</regex>
+  <order>srcuser, jamf_actor_id, jamf_action, jamf_object, jamf_timestamp</order>
+</decoder>
+<!-- Object identity from the detail body (multiline): first "Name" / "Display Name"
+     line; padding is spaces or dots depending on the object type. -->
+<decoder name="jamf-change">
+  <parent>jamf-change</parent>
+  <regex type="pcre2">\n[ \t]+(?:Display )?Name[ .]+(\S.*?)[ \t]*(?:\n|$)</regex>
+  <order>jamf_object_name</order>
+</decoder>
+
+<!-- ============================================================= -->
+<!-- jamf-pro-installer.log  (instance install / upgrade)          -->
+<!-- [YYYY-MM-DD HH:MM:SS]:  <message>                             -->
+<!-- ============================================================= -->
+<decoder name="jamf-installer">
+  <prematch type="pcre2">^\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\]: </prematch>
+</decoder>
+<decoder name="jamf-installer">
+  <parent>jamf-installer</parent>
+  <regex type="pcre2">^\[.+?\]:\s+(.+?)\s*$</regex>
+  <order>jamf_installer_msg</order>
+</decoder>
