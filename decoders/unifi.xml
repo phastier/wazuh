@@ -724,6 +724,13 @@
   <regex type="pcre2">\|(\d+)\|([^|]+)\|(\d+)\|</regex>
   <order>id, action, status</order>
 </decoder>
+<!-- Human-readable message, e.g. msg="Portillon has recorded a vehicle." -->
+<!-- (carries the camera/device name + what was detected) -->
+<decoder name="unifi-protect-cef">
+  <parent>unifi-protect-cef-parent</parent>
+  <regex type="pcre2">msg="([^"]+)"</regex>
+  <order>extra_data</order>
+</decoder>
 
 <!-- Catch-all for other UniFi Network CEF events -->
 <!-- MUST be AFTER specific decoders (UPS, WiFi, etc.) -->
