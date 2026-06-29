@@ -59,7 +59,7 @@ Custom decoders and rules for Jamf Pro's application logs — no community Wazuh
 - **Authentication** (`JSSAccess.log`): console & API logins (success/failure), logout, API token creation, password changes — with user, source IP and entry point (JSS console / Universal API / OAuth)
 - **Audit trail** (`JAMFChangeManagement.log`): full CRUD on every Jamf object (accounts, groups, policies, configuration profiles, scripts, MDM commands, settings…) with actor, action and object type
 - **Full audit visibility**: every event is decoded and surfaced — including READ access at a low level (3) with the object name extracted — so nothing is hidden by default; sensitive-object reads (level 5) and FileVault key access (level 12) are escalated. Reads are ~96% of the audit volume, so set rule `100511` to level 0 to suppress them once you have decided what you do not want to see.
-- **Sensitive object escalation**: admin **Account** changes (level 10), **API client / client secret** changes (level 12), **MDM commands** (Erase Device, Set Activation Lock…) (level 9), **security settings** (Jamf Protect, Conditional Access, Change Management, Push Certificate, SMTP) (level 8)
+- **Sensitive object escalation**: admin **Account** changes (level 10), **API client / client secret** changes (level 12), **MDM commands** (level 9) with **destructive commands** (erase / wipe / unmanage) at level 12, **security settings** (Jamf Protect, Conditional Access, Change Management, Push Certificate, SMTP) (level 8)
 - **FileVault recovery key (PRK) access** (level 12): detects an admin viewing a computer's FileVault Personal Recovery Key — Jamf logs this as an empty-object `READ` whose body carries `File Vault 2 ID` (requires multi-line collection)
 - **Object name extraction** (`jamf_object_name`): pulls the changed object's name from the multi-line body (e.g. which script/policy/profile)
 - **Brute force correlation**: repeated failed logins from the same source IP
@@ -197,6 +197,8 @@ Jamf Pro writes log4j files under `/usr/local/jss/logs/` — it does **not** sen
 ```
 `JAMFChangeManagement.log` is collected as **multi-line** (`match="start"` on the `^[` header) so each change is a single event carrying the header **plus** the detail body — i.e. the object name and the changed fields, not just the object type. Note that Jamf logs mostly metadata, but some changes (Configuration Profile payloads, script-content edits) include larger/sensitive blobs — tune at the agent or rule level if needed. Then restart the agent. In Jamf Pro, enable the audit trail under **Settings → System → Change Management → Use Log File** (directory `/usr/local/jss/logs`). The agent runs as root, so it can read both files regardless of their `jamftomcat` ownership.
 
+> **Why file collection and not syslog?** Jamf Pro's Change Management can alternatively forward to a syslog server (*Settings → System → Change Management → Use Syslog Server*). We deliberately **chose not to** (for now): syslog only covers Change Management — not `JSSAccess.log` or the installer log — it can drop events over UDP, and being line-oriented it would lose the multi-line detail body that carries the **object name** and the FileVault recovery-key signature (`File Vault 2 ID`). File collection via the agent keeps everything, reliably. (Use syslog instead if you only need a condensed change feed forwarded to a central collector.)
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -227,7 +229,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100430 | FortiGate | Correlation (repeated VPN denies) |
 | 100500-100507 | Jamf Pro | Authentication (login, logout, token, failed login, password change, brute force) |
 | 100510-100516 | Jamf Pro | Change management (READ surfaced at low level + object name, sensitive objects + FileVault PRK escalated, create/update/delete) |
-| 100520-100524 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM command, security settings, audit log retention) |
+| 100520-100525 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM commands incl. destructive erase/wipe, security settings, audit log retention) |
 | 100530-100534 | Jamf Pro | Instance install/upgrade (upgrade steps, disk warning, install failure) |
 
 ## Decoded fields

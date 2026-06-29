@@ -189,6 +189,18 @@
     <group>jamf,audit,policy_changed,log_retention,</group>
   </rule>
 
+  <!-- Destructive MDM commands (erase / wipe / unmanage) escalated above the
+       generic MDM command rule (100522). -->
+  <rule id="100525" level="12">
+    <if_sid>100522</if_sid>
+    <field name="jamf_object">Erase|Wipe|Unmanage|Remove MDM</field>
+    <description>Jamf Pro: DESTRUCTIVE MDM command - $(jamf_object) by $(srcuser)</description>
+    <mitre>
+      <id>T1561</id>
+    </mitre>
+    <group>jamf,audit,mdm,command,destructive,</group>
+  </rule>
+
   <!-- ============================================================ -->
   <!-- INSTANCE INSTALL / UPGRADE  (jamf-pro-installer.log)         -->
   <!-- ============================================================ -->
