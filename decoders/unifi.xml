@@ -707,6 +707,24 @@
   <order>id, action, status</order>
 </decoder>
 
+<!-- ============================================ -->
+<!-- UniFi Protect CEF events                     -->
+<!-- A hyphenated UDM hostname makes the BSD       -->
+<!-- pre-decoder set program_name=CEF, after which -->
+<!-- the bare 'ubiquiti' prematch no longer matches-->
+<!-- (cf. learning #4). Protect therefore needs its-->
+<!-- own CEF parent, like Network and OS.          -->
+<!-- ============================================ -->
+<decoder name="unifi-protect-cef-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Protect</prematch>
+</decoder>
+<decoder name="unifi-protect-cef">
+  <parent>unifi-protect-cef-parent</parent>
+  <regex type="pcre2">\|(\d+)\|([^|]+)\|(\d+)\|</regex>
+  <order>id, action, status</order>
+</decoder>
+
 <!-- Catch-all for other UniFi Network CEF events -->
 <!-- MUST be AFTER specific decoders (UPS, WiFi, etc.) -->
 <decoder name="unifi-network-cef-parent">

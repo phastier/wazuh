@@ -32,7 +32,7 @@ Custom decoders and rules — the existing BNC community rules are broken.
 
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
-- **Protect**: Smart detection (person/vehicle/animal/license plate), camera motion, sensor motion, tamper, loiter, device disconnect, door sensor open/close, admin activity, intrusion correlation
+- **Protect**: Smart detection (person/vehicle/animal/license plate), **smart audio detection** (alarms/glass-break), camera motion, sensor motion, **camera tamper**, loiter, device connect/disconnect, door sensor open/close, admin activity, intrusion correlation
 - **IoT sensors**: Door opened/closed events from Protect sensors (category=iot), motion detection from Protect-managed IoT devices
 - **OS**: Console access, application update notifications and tracking — covers the UniFi OS layer independently from Network and Protect
 - **Audit trail**: Configuration changes (created/modified/removed), software updates, console access — essential for DORA/compliance
@@ -108,6 +108,8 @@ These are hard-won lessons from building these integrations:
 12. **FortiGate VPN rule: always filter on action** — A rule matching `vpntype="ipsecvpn"` without `action="deny"` will flag all ZTNA/IPsec traffic (accept, close, client-rst) as "denied". Always combine VPN type with action filter.
 
 13. **UniFi debug mode reveals hidden CEF events** — Some CEF event types (like Config Modified, ID 546) only appear when syslog is set to debug level. Enable debug temporarily to discover all available event types, then revert to normal.
+
+14. **UniFi Protect needs its own CEF parent decoder** — A hyphenated UDM hostname makes the BSD pre-decoder set `program_name=CEF` (learning #4); once that happens, the bare `ubiquiti` prematch decoder no longer matches, so **Protect events silently stop decoding** (`decoder: {}`, no alert) while Network/OS keep working because they have dedicated `*-cef-parent` decoders with `<program_name>^CEF</program_name>`. Fix: add a `unifi-protect-cef-parent` (program_name CEF + prematch `Ubiquiti\|UniFi Protect`) and point the Protect rule (100312) at it instead of `decoded_as ubiquiti`. Symptom to watch for: UniFi *Network* events alert but *Protect* events (smart detect, tamper, motion) never do.
 
 ## Installation
 
@@ -223,6 +225,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100350 | UniFi | System suppression |
 | 100351-100356 | UniFi | Network audit & infra (console access, config created/modified/removed, software updates, AP link speed) |
 | 100360-100363 | UniFi | OS events (console access, application update available/completed) |
+| 100364-100367 | UniFi | Protect (camera tamper, smart audio detect, device connect/disconnect) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -291,10 +294,11 @@ These are the UniFi Network, Protect, and OS CEF event IDs we have identified an
 | 1100 | Application Update Available | OS | |
 | 1102 | Application Updated | OS | |
 | 2008 | Access | Protect | |
+| 2103 | Device Connected | Protect | |
 | 2108 | Update | Protect | |
 | 2150 | Device Disconnected | Protect | |
 | 2159 | Motion (camera) | Protect | |
-| 2161 | Smart Detect Zone / Tamper / Loiter | Protect | |
+| 2161 | Smart Detect: Zone / Loiter / Tamper / Audio | Protect | Tamper & audio have dedicated rules |
 | 2201 | Sensor Motion | Protect | Also appears with category=iot |
 | 2202 | Sensor Opened | Protect | Also appears with category=iot |
 | 2203 | Sensor Closed | Protect | |

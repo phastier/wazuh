@@ -28,8 +28,8 @@
 
   <!-- PROTECT: catch-all (parent for all Protect events) -->
   <rule id="100312" level="4">
-    <decoded_as>ubiquiti</decoded_as>
-    <description>UniFi Protect: Event - $(data.action)</description>
+    <decoded_as>unifi-protect-cef-parent</decoded_as>
+    <description>UniFi Protect: Event - $(action)</description>
     <group>unifi,protect,</group>
   </rule>
 
@@ -81,6 +81,38 @@
     <if_matched_sid>100310</if_matched_sid>
     <description>UniFi Protect: Multiple smart detections - possible intrusion</description>
     <group>unifi,protect,smartdetect,alert,</group>
+  </rule>
+
+  <!-- Protect: Camera tamper (CEF 2161 smartDetectTamper) - physical security -->
+  <rule id="100364" level="8">
+    <if_sid>100312</if_sid>
+    <match>smartDetectTamper</match>
+    <description>UniFi Protect: Camera tamper detected - possible physical tampering</description>
+    <group>unifi,protect,smartdetect,tamper,alert,</group>
+  </rule>
+
+  <!-- Protect: Smart audio detection (CEF 2161 smartAudioDetect) - alarms, glass break, etc. -->
+  <rule id="100365" level="5">
+    <if_sid>100312</if_sid>
+    <match>smartAudioDetect</match>
+    <description>UniFi Protect: Smart audio detection (alarm / glass-break / etc.)</description>
+    <group>unifi,protect,smartdetect,audio,</group>
+  </rule>
+
+  <!-- Protect: Device disconnected (CEF 2150) - camera/sensor offline / possible tamper -->
+  <rule id="100366" level="5">
+    <if_sid>100312</if_sid>
+    <match>deviceDisconnected</match>
+    <description>UniFi Protect: Device disconnected (camera/sensor offline)</description>
+    <group>unifi,protect,device,disconnection,</group>
+  </rule>
+
+  <!-- Protect: Device connected (CEF 2103) -->
+  <rule id="100367" level="3">
+    <if_sid>100312</if_sid>
+    <match>deviceConnected</match>
+    <description>UniFi Protect: Device connected</description>
+    <group>unifi,protect,device,connection,</group>
   </rule>
 
   <!-- DHCP -->
