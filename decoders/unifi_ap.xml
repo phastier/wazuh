@@ -1,0 +1,47 @@
+<!--
+  UniFi AP / device syslog decoders
+  Astier Consulting - https://www.astier-consulting.fr
+
+  UniFi access points emit syslog as: <apMAC12hex>,<model+ver>: <daemon>[pid]: <msg>
+  Philosophy: decode EVERYTHING readably (daemon + message + specific fields);
+  control volume at the source, not by dropping the decode.
+
+  CAVEAT - symantec-av collision: the "<12-hex>," prefix also matches the built-in
+  symantec-av decoder (^\w{12},). On some managers (e.g. 4.14.5) that decoder locks
+  on the prematch and unifi-ap never runs. Fix - upgrade-safe: exclude it in
+  ossec.conf via <decoder_exclude>0330-symantec_decoders.xml</decoder_exclude>
+  (+ the matching <rule_exclude> lines). See README learning #15.
+
+  STRUCTURE: Wazuh evaluates only ONE pcre2 child per parent (learning #1), so each
+  specific log type gets its own parent, placed BEFORE the generic unifi-ap catch-all.
+-->
+
+<!-- Fan/thermal telemetry (ubnt-fanctrl) -->
+<decoder name="unifi-ap-fan">
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+: ubnt-fanctrl\[</prematch>
+</decoder>
+<decoder name="unifi-ap-fan-fields">
+  <parent>unifi-ap-fan</parent>
+  <regex type="pcre2">Fan speed (\d+)%.*pwm: (\d+) \(set\) / (\d+) \(actual\).*fan rpm: (\d+).*sensor (\S+) temp: (\d+)</regex>
+  <order>fan_speed, pwm_set, pwm_actual, fan_rpm, sensor_zone, ap_temp</order>
+</decoder>
+
+<!-- Wi-Fi client association/disassociation at the AP (hostapd) -->
+<decoder name="unifi-ap-wifi">
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+: hostapd\[\d+\]:.* STA [0-9a-fA-F:]+ IEEE 802\.11: (associated|disassociated)</prematch>
+</decoder>
+<decoder name="unifi-ap-wifi-fields">
+  <parent>unifi-ap-wifi</parent>
+  <regex type="pcre2">^([0-9a-fA-F]{12}),(\S+): hostapd\[\d+\]: (\S+): STA ([0-9a-fA-F:]+) IEEE 802\.11: (associated|disassociated)</regex>
+  <order>ap_mac, ap_model, ap_radio, client_mac, wifi_action</order>
+</decoder>
+
+<!-- Generic AP catch-all: extract daemon + message so every AP line is readable -->
+<decoder name="unifi-ap">
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+:\s\S+(?:\[\d+\])+:\s</prematch>
+</decoder>
+<decoder name="unifi-ap-fields">
+  <parent>unifi-ap</parent>
+  <regex type="pcre2">^[0-9a-fA-F]{12},(\S+?):\s(\S+?)(?:\[\d+\])+:\s*(.*)</regex>
+  <order>ap_model, ap_daemon, ap_message</order>
+</decoder>

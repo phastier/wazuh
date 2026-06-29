@@ -111,12 +111,15 @@ These are hard-won lessons from building these integrations:
 
 14. **UniFi Protect needs its own CEF parent decoder** — A hyphenated UDM hostname makes the BSD pre-decoder set `program_name=CEF` (learning #4); once that happens, the bare `ubiquiti` prematch decoder no longer matches, so **Protect events silently stop decoding** (`decoder: {}`, no alert) while Network/OS keep working because they have dedicated `*-cef-parent` decoders with `<program_name>^CEF</program_name>`. Fix: add a `unifi-protect-cef-parent` (program_name CEF + prematch `Ubiquiti\|UniFi Protect`) and point the Protect rule (100312) at it instead of `decoded_as ubiquiti`. Symptom to watch for: UniFi *Network* events alert but *Protect* events (smart detect, tamper, motion) never do.
 
+15. **UniFi AP (hostapd) events collide with the built-in `symantec-av` decoder** — Access points/switches send syslog as `<12-hex-MAC>,<model>: hostapd[..]: ... STA <mac> IEEE 802.11: associated|disassociated`. That leading `<12 hex>,` matches the built-in `symantec-av` prematch (`^\w{12},`); its own regex then fails (our prefix is hex, not the digits-CSV it expects). On some Wazuh builds the engine falls through to the next decoder so `unifi-ap` matches, but on others (observed on 4.14.5) it **locks onto `symantec-av` on the prematch alone** — AP client connect/disconnect events get mis-labelled "symantec-av" (fires rule 7300) and `unifi-ap` never runs. **Two managers on the same version can behave differently here** (decoder_dir ordering does NOT override it). Fix — upgrade-safe, no base-file edits — exclude the symantec decoder in `ossec.conf`: `<decoder_exclude>0330-symantec_decoders.xml</decoder_exclude>` plus the matching `<rule_exclude>` lines. Symptom to watch for: "who connects to which AP/switch" events appear under Symantec AV instead of UniFi.
+
 ## Installation
 
 ### 1. Copy decoders
 ```bash
 cp decoders/mikrotik_custom.xml /var/ossec/etc/decoders/
 cp decoders/ubiquiti.xml /var/ossec/etc/decoders/
+cp decoders/unifi_ap.xml /var/ossec/etc/decoders/      # UniFi AP hostapd (client assoc/disassoc) - see learning #15
 # Only if you use UniFi Protect (CEF format):
 cp decoders/unifi.xml /var/ossec/etc/decoders/
 ```
@@ -125,6 +128,7 @@ cp decoders/unifi.xml /var/ossec/etc/decoders/
 ```bash
 cp rules/mikrotik_rules.xml /var/ossec/etc/rules/
 cp rules/unifi_rules.xml /var/ossec/etc/rules/
+cp rules/unifi_ap_rules.xml /var/ossec/etc/rules/      # UniFi AP hostapd rules (100368-100370)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -137,10 +141,15 @@ chown wazuh:wazuh /var/ossec/etc/rules/*.xml
 chmod 660 /var/ossec/etc/decoders/*.xml /var/ossec/etc/rules/*.xml
 ```
 
-### 4. Disable conflicting BNC rules (if present)
+### 4. Disable conflicting built-in decoders/rules
 Add to `/var/ossec/etc/ossec.conf` inside `<ruleset>`:
 ```xml
 <rule_exclude>0999-bnc-unifi-rules.xml</rule_exclude>
+<!-- Required for UniFi AP hostapd events (see learning #15): the built-in
+     symantec-av decoder false-matches the "<12-hex>," AP syslog prefix. -->
+<decoder_exclude>0330-symantec_decoders.xml</decoder_exclude>
+<rule_exclude>0120-symantec-av_rules.xml</rule_exclude>
+<rule_exclude>0125-symantec-ws_rules.xml</rule_exclude>
 ```
 
 ### 5. Validate and restart
@@ -351,7 +360,7 @@ echo '[jdoe (ID: 5)] [DELETE] [API Client - Client Secret] [2026-06-29T10:02:00.
 - [ ] JAMF Protect & Security Cloud integration
 - [ ] Fortinet VPN tunnel state monitoring (up/down)
 - [ ] UniFi threat/IDS event decoding
-- [ ] UniFi AP direct logs (hostapd, kernel wlan events from access points)
+- [x] UniFi AP direct logs — hostapd Wi-Fi client assoc/disassoc (`unifi_ap.xml`, rules 100368-100370); needs symantec `decoder_exclude` (see learning #15). Kernel/wlan events still TODO.
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing

@@ -88,9 +88,12 @@
 </decoder>
 
 
-<!-- firewall messages -->
+<!-- firewall messages. The prematch requires the netfilter IN=/OUT= signature via a
+     zero-width lookahead, so it does NOT false-match other bracketed logs (e.g. an
+     nginx access line "IP - - [date] ..." on a host that also ships nginx logs).
+     The captured (\[.+\]) is unchanged, so offset="after_parent" children are unaffected. -->
 <decoder name="unifi-udm-pro-se">
-    <prematch type="pcre2">^.*(\[.*\])\s</prematch>
+    <prematch type="pcre2">^(?=.*\sIN=\S* OUT=).*(\[.+\])\s</prematch>
 </decoder>
 
 
@@ -201,6 +204,28 @@
   <parent>unifi-wifi-roamed-parent</parent>
   <regex type="pcre2">\|(\d+)\|WiFi Client Roamed\|(\d+)\|.*?UNIFIconnectedToDeviceName=(\S+).*?UNIFIlastConnectedToDeviceName=(\S+).*?UNIFIclientAlias=(.*?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(\S+)</regex>
   <order>id, status, extra_data, url, dstuser, srcip, srcmac, system_name</order>
+</decoder>
+
+<!-- Wired Client Connected (enriched: client + switch/port + network) -->
+<decoder name="unifi-wired-connected-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Wired Client Connected</prematch>
+</decoder>
+<decoder name="unifi-wired-connected">
+  <parent>unifi-wired-connected-parent</parent>
+  <regex type="pcre2">UNIFIconnectedToDeviceName=(.+?) UNIFIconnectedToDevicePort=(\S+).*?UNIFIclientAlias=(.+?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFInetworkName=(\S+).*?UNIFInetworkVlan=(\S+)</regex>
+  <order>switch_name, switch_port, dstuser, srcip, srcmac, network, vlan</order>
+</decoder>
+
+<!-- Wired Client Disconnected (enriched: client + switch/port + duration) -->
+<decoder name="unifi-wired-disconnected-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Wired Client Disconnected</prematch>
+</decoder>
+<decoder name="unifi-wired-disconnected">
+  <parent>unifi-wired-disconnected-parent</parent>
+  <regex type="pcre2">UNIFIlastConnectedToDeviceName=(.+?) UNIFIlastConnectedToDevicePort=(\S+).*?UNIFIclientAlias=(.+?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+) UNIFIduration=(.+?) UNIFIusage</regex>
+  <order>switch_name, switch_port, dstuser, srcip, srcmac, data</order>
 </decoder>
 
 <!-- Admin Accessed -->

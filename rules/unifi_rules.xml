@@ -180,19 +180,17 @@
     <group>unifi,network,</group>
   </rule>
 
-  <!-- Wired Client Connected -->
+  <!-- Wired Client Connected (enriched) -->
   <rule id="100345" level="3">
-    <if_sid>100344</if_sid>
-    <match>Wired Client Connected</match>
-    <description>UniFi: Wired client connected</description>
+    <decoded_as>unifi-wired-connected-parent</decoded_as>
+    <description>UniFi: Wired client connected - $(dstuser) [$(srcip) / $(srcmac)] on $(switch_name) port $(switch_port) ($(network) vlan $(vlan))</description>
     <group>unifi,wired,connection,</group>
   </rule>
 
-  <!-- Wired Client Disconnected -->
+  <!-- Wired Client Disconnected (enriched) -->
   <rule id="100346" level="3">
-    <if_sid>100344</if_sid>
-    <match>Wired Client Disconnected</match>
-    <description>UniFi: Wired client disconnected</description>
+    <decoded_as>unifi-wired-disconnected-parent</decoded_as>
+    <description>UniFi: Wired client disconnected - $(dstuser) [$(srcip)] from $(switch_name) port $(switch_port) (connected $(data))</description>
     <group>unifi,wired,disconnection,</group>
   </rule>
 

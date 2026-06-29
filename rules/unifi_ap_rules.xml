@@ -1,0 +1,45 @@
+<!--
+  UniFi AP (per-AP syslog) rules for Wazuh
+  Astier Consulting - https://www.astier-consulting.fr
+  Rule IDs: 100368-100372 | Decoder: decoders/unifi_ap.xml
+  Decode-everything-readably: generic AP events show "daemon: message"; specific
+  types (Wi-Fi client, fan/thermal) get enriched descriptions. Tune levels / cut
+  volume at the source rather than dropping the decode.
+-->
+<group name="unifi,ap,">
+  <!-- Generic AP event: readable daemon + message (syswrapper, wevent, wpa_supplicant, ...) -->
+  <rule id="100368" level="3">
+    <decoded_as>unifi-ap</decoded_as>
+    <description>UniFi AP [$(ap_daemon)]: $(ap_message)</description>
+    <group>unifi,ap,</group>
+  </rule>
+
+  <!-- Wi-Fi client association at the AP (hostapd) -->
+  <rule id="100369" level="3">
+    <decoded_as>unifi-ap-wifi</decoded_as>
+    <field name="wifi_action">^associated$</field>
+    <description>UniFi AP: Wi-Fi client connected to a borne - client $(client_mac) [$(ap_radio)]</description>
+    <group>unifi,ap,wifi,connection,</group>
+  </rule>
+  <rule id="100370" level="3">
+    <decoded_as>unifi-ap-wifi</decoded_as>
+    <field name="wifi_action">^disassociated$</field>
+    <description>UniFi AP: Wi-Fi client disconnected from a borne - client $(client_mac) [$(ap_radio)]</description>
+    <group>unifi,ap,wifi,disconnection,</group>
+  </rule>
+
+  <!-- AP fan/thermal telemetry: readable, low level (high frequency); cut at source if noisy -->
+  <rule id="100371" level="1">
+    <decoded_as>unifi-ap-fan</decoded_as>
+    <description>UniFi AP: fan/thermal - $(sensor_zone) $(ap_temp)C, fan $(fan_speed)% / $(fan_rpm) rpm</description>
+    <group>unifi,ap,telemetry,</group>
+  </rule>
+
+  <!-- AP high temperature escalation (>=90C). Tune the threshold to your hardware. -->
+  <rule id="100372" level="8">
+    <if_sid>100371</if_sid>
+    <field name="ap_temp" type="pcre2">^(9\d|\d{3})$</field>
+    <description>UniFi AP: HIGH temperature - $(sensor_zone) $(ap_temp)C (fan $(fan_speed)%)</description>
+    <group>unifi,ap,telemetry,thermal,</group>
+  </rule>
+</group>
