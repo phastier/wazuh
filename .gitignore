@@ -2,3 +2,7 @@
 *.bak2
 *.disabled
 *.log
+
+# macOS
+.DS_Store
+**/.DS_Store
