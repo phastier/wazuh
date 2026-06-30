@@ -312,6 +312,19 @@
     <group>unifi,ids,threat,alert,</group>
   </rule>
 
+  <!-- AP mesh topology (CEF 575 / 576) -->
+  <rule id="100381" level="3">
+    <decoded_as>unifi-ap-meshed-parent</decoded_as>
+    <description>UniFi: AP $(ap_name) meshed via $(mesh_parent)</description>
+    <group>unifi,mesh,</group>
+  </rule>
+
+  <rule id="100382" level="5">
+    <decoded_as>unifi-ap-stopmesh-parent</decoded_as>
+    <description>UniFi: AP $(ap_name) lost its mesh uplink (was via $(mesh_parent))</description>
+    <group>unifi,mesh,</group>
+  </rule>
+
   <!-- ================================ -->
   <!-- UNIFI OS EVENTS                  -->
   <!-- ================================ -->

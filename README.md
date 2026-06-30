@@ -232,11 +232,13 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
 | 100340-100349 | UniFi | WiFi, Wired, Network CEF, Device Updates, UPS power |
 | 100350 | UniFi | System suppression |
-| 100351-100356 | UniFi | Network audit & infra (console access, config created/modified/removed, software updates, AP link speed) |
+| 100351-100357 | UniFi | Network audit & infra (admin console access w/ IP, config created/modified incl. security-setting escalation, removed, software updates, AP link speed) |
+| 100358-100359 | UniFi | IDS/IPS threat detected & blocked (readable signature + src/dst; high-risk escalated to L10) |
 | 100360-100363 | UniFi | OS events (console access, application update available/completed) |
 | 100364-100367 | UniFi | Protect (camera tamper, smart audio detect, device connect/disconnect) |
 | 100368-100372 | UniFi | AP per-AP syslog (readable daemon+message, Wi-Fi client assoc/disassoc, fan/thermal telemetry + high-temp escalation) |
 | 100380 | UniFi | Switch per-switch syslog (readable daemon+message) |
+| 100381-100382 | UniFi | AP mesh topology (meshed / lost mesh uplink) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -306,6 +308,29 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `sw_daemon` | Daemon that emitted the line | `mcad` |
 | `sw_message` | Readable message body | `ui-ubus-utils...: Failed to find ubus object` |
 | `sw_model` | Switch model + firmware | `USW-Pro-Max-48-7.5.4+17029` |
+
+### UniFi IDS/IPS threat (Threat Detected and Blocked)
+| Field | Content | Example |
+|-------|---------|---------|
+| `signature` | IPS signature / threat name | `ET MALWARE ... RAT C2 Domain in DNS Lookup` |
+| `risk` | Risk level | `high` |
+| `policy` | Policy name | `Malware and Trojans` |
+| `srcip` / `dstip` | Source / destination IP | `192.0.2.10` / `198.51.100.5` |
+| `signature_id` | IPS signature ID | `2068515` |
+
+### UniFi admin / audit (console access, config change)
+| Field | Content | Example |
+|-------|---------|---------|
+| `dstuser` | Admin who performed the action | `jdoe` |
+| `srcip` | Source IP of the admin | `203.0.113.10` |
+| `access_method` | Access method (console access) | `web` |
+| `setting` | Setting key changed (config modified) | `ip_filtering.countries` |
+
+### UniFi AP mesh (AP Meshed / Stopped Mesh)
+| Field | Content | Example |
+|-------|---------|---------|
+| `ap_name` | AP whose mesh state changed | `AP-Garden` |
+| `mesh_parent` | Mesh uplink AP (new or prior) | `AP-House` |
 
 ### UniFi UPS (enriched)
 | Field | Content | Example |

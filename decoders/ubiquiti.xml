@@ -261,6 +261,28 @@
   <order>risk, policy, policy_type, srcip, dstip, signature, signature_id</order>
 </decoder>
 
+<!-- AP Meshed (575): AP joined the mesh via a parent AP -->
+<decoder name="unifi-ap-meshed-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|AP Meshed</prematch>
+</decoder>
+<decoder name="unifi-ap-meshed">
+  <parent>unifi-ap-meshed-parent</parent>
+  <regex type="pcre2">UNIFIdeviceName=(.*?)(?= UNIFI).*?UNIFImeshParentDeviceName=(.*?)(?= UNIFI)</regex>
+  <order>ap_name, mesh_parent</order>
+</decoder>
+
+<!-- AP Stopped Mesh (576): AP lost its mesh uplink -->
+<decoder name="unifi-ap-stopmesh-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|AP Stopped Mesh</prematch>
+</decoder>
+<decoder name="unifi-ap-stopmesh">
+  <parent>unifi-ap-stopmesh-parent</parent>
+  <regex type="pcre2">UNIFIdeviceName=(.*?)(?= UNIFI).*?UNIFIpriorMeshParentDeviceName=(.*?)(?= UNIFI)</regex>
+  <order>ap_name, mesh_parent</order>
+</decoder>
+
 <!-- Admin Accessed -->
 <decoder name="unifi-admin-accessed-parent">
   <program_name>^CEF</program_name>
