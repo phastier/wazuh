@@ -325,6 +325,26 @@
     <group>unifi,mesh,</group>
   </rule>
 
+  <!-- Outbound IDS/IPS threat (internal client reached a flagged destination) -->
+  <rule id="100383" level="6">
+    <decoded_as>unifi-threat-out-parent</decoded_as>
+    <description>UniFi IDS/IPS: outbound threat blocked - client $(srcuser) [$(srcmac)] -> $(dstip): $(signature)</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>unifi,ids,threat,</group>
+  </rule>
+
+  <rule id="100384" level="10">
+    <if_sid>100383</if_sid>
+    <field name="risk" type="pcre2">high|critical</field>
+    <description>UniFi IDS/IPS: HIGH-RISK outbound threat - client $(srcuser) [$(srcmac)] reached $(dstip): $(signature)</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>unifi,ids,threat,alert,</group>
+  </rule>
+
   <!-- ================================ -->
   <!-- UNIFI OS EVENTS                  -->
   <!-- ================================ -->

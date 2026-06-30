@@ -239,6 +239,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100368-100372 | UniFi | AP per-AP syslog (readable daemon+message, Wi-Fi client assoc/disassoc, fan/thermal telemetry + high-temp escalation) |
 | 100380 | UniFi | Switch per-switch syslog (readable daemon+message) |
 | 100381-100382 | UniFi | AP mesh topology (meshed / lost mesh uplink) |
+| 100383-100384 | UniFi | IDS/IPS outbound threat (internal client reached a flagged destination; high-risk escalated) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
@@ -317,6 +318,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `policy` | Policy name | `Malware and Trojans` |
 | `srcip` / `dstip` | Source / destination IP | `192.0.2.10` / `198.51.100.5` |
 | `signature_id` | IPS signature ID | `2068515` |
+| `srcuser` / `srcmac` | Internal client (outbound threat) | `LAPTOP-1` / `aa:bb:cc:dd:ee:ff` |
 
 ### UniFi admin / audit (console access, config change)
 | Field | Content | Example |

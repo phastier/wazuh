@@ -250,7 +250,20 @@
   <order>setting, dstuser, srcip</order>
 </decoder>
 
-<!-- Threat Detected and Blocked (IDS/IPS, CEF 201) -->
+<!-- Outgoing threat (CEF 201, UNIFIdirection=outgoing): an internal client reached a
+     flagged destination. No plain src= - the source is in UNIFIsrcClient* fields.
+     Placed BEFORE the generic threat parent so it claims outbound events first. -->
+<decoder name="unifi-threat-out-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Threat Detected.*?UNIFIdirection=outgoing</prematch>
+</decoder>
+<decoder name="unifi-threat-out">
+  <parent>unifi-threat-out-parent</parent>
+  <regex type="pcre2">UNIFIrisk=(\S+) UNIFIpolicyName=(.*?)(?= UNIFI).*?dst=(\S+).*?UNIFIsrcClientHostname=(\S+).*?UNIFIsrcClientMac=(\S+).*?UNIFIipsSignature=(.*?)(?= UNIFI)</regex>
+  <order>risk, policy, dstip, srcuser, srcmac, signature</order>
+</decoder>
+
+<!-- Threat Detected and Blocked (IDS/IPS, CEF 201) - incoming/local (plain src=/dst=) -->
 <decoder name="unifi-threat-parent">
   <program_name>^CEF</program_name>
   <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Threat Detected</prematch>
