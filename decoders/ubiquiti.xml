@@ -180,7 +180,7 @@
 </decoder>
 <decoder name="unifi-wifi-connected">
   <parent>unifi-wifi-connected-parent</parent>
-  <regex type="pcre2">\|(\d+)\|WiFi Client Connected\|(\d+)\|.*?UNIFIconnectedToDeviceName=(\S+).*?UNIFIclientAlias=(.*?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(\S+) UNIFIwifiBand=(\S+).*?UNIFIWiFiRssi=(-?\d+).*?UNIFInetworkName=(\S+)</regex>
+  <regex type="pcre2">\|(\d+)\|WiFi Client Connected\|(\d+)\|.*?UNIFIconnectedToDeviceName=(.*?)(?= UNIFI).*?UNIFIclientAlias=(.*?)(?= UNIFI).*?UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(.*?)(?= UNIFI).*?UNIFIwifiBand=(\S+).*?UNIFIWiFiRssi=(-?\d+).*?UNIFInetworkName=(.*?)(?= UNIFI)</regex>
   <order>id, status, extra_data, dstuser, srcip, srcmac, system_name, protocol, data, action</order>
 </decoder>
 
@@ -191,7 +191,7 @@
 </decoder>
 <decoder name="unifi-wifi-disconnected">
   <parent>unifi-wifi-disconnected-parent</parent>
-  <regex type="pcre2">\|(\d+)\|WiFi Client Disconnected\|(\d+)\|.*?UNIFIlastConnectedToDeviceName=(\S+).*?UNIFIclientAlias=(.*?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(\S+) UNIFIwifiBand=(\S+).*?UNIFIduration=(\S+)</regex>
+  <regex type="pcre2">\|(\d+)\|WiFi Client Disconnected\|(\d+)\|.*?UNIFIlastConnectedToDeviceName=(.*?)(?= UNIFI).*?UNIFIclientAlias=(.*?)(?= UNIFI).*?UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(.*?)(?= UNIFI).*?UNIFIwifiBand=(\S+).*?UNIFIduration=(\S+)</regex>
   <order>id, status, extra_data, dstuser, srcip, srcmac, system_name, protocol, data</order>
 </decoder>
 
@@ -202,7 +202,7 @@
 </decoder>
 <decoder name="unifi-wifi-roamed">
   <parent>unifi-wifi-roamed-parent</parent>
-  <regex type="pcre2">\|(\d+)\|WiFi Client Roamed\|(\d+)\|.*?UNIFIconnectedToDeviceName=(\S+).*?UNIFIlastConnectedToDeviceName=(\S+).*?UNIFIclientAlias=(.*?) UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(\S+)</regex>
+  <regex type="pcre2">\|(\d+)\|WiFi Client Roamed\|(\d+)\|.*?UNIFIconnectedToDeviceName=(.*?)(?= UNIFI).*?UNIFIlastConnectedToDeviceName=(.*?)(?= UNIFI).*?UNIFIclientAlias=(.*?)(?= UNIFI).*?UNIFIclientIp=(\S+) UNIFIclientMac=(\S+).*?UNIFIwifiName=(.*?)(?= UNIFI)</regex>
   <order>id, status, extra_data, url, dstuser, srcip, srcmac, system_name</order>
 </decoder>
 
@@ -237,6 +237,28 @@
   <parent>unifi-network-accessed-parent</parent>
   <regex type="pcre2">UNIFIaccessMethod=(\S+).*? UNIFIadmin=(\S+).*? src=(\S+)</regex>
   <order>access_method, dstuser, srcip</order>
+</decoder>
+
+<!-- Config Modified (audit: admin changed a setting, e.g. ip_filtering.* = IDS/IPS) -->
+<decoder name="unifi-config-modified-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Config Modified</prematch>
+</decoder>
+<decoder name="unifi-config-modified">
+  <parent>unifi-config-modified-parent</parent>
+  <regex type="pcre2">UNIFIsettingsChanges=([^: ]+).*? UNIFIadmin=(\S+) src=(\S+)</regex>
+  <order>setting, dstuser, srcip</order>
+</decoder>
+
+<!-- Threat Detected and Blocked (IDS/IPS, CEF 201) -->
+<decoder name="unifi-threat-parent">
+  <program_name>^CEF</program_name>
+  <prematch type="pcre2">Ubiquiti\|UniFi Network\|[\d.]+\|\d+\|Threat Detected</prematch>
+</decoder>
+<decoder name="unifi-threat">
+  <parent>unifi-threat-parent</parent>
+  <regex type="pcre2">UNIFIrisk=(\S+) UNIFIpolicyName=(.*?) UNIFIpolicyType=(\S+).*? src=(\S+) dst=(\S+).*?UNIFIipsSignature=(.*?) UNIFIipsSignatureId=(\d+)</regex>
+  <order>risk, policy, policy_type, srcip, dstip, signature, signature_id</order>
 </decoder>
 
 <!-- Admin Accessed -->

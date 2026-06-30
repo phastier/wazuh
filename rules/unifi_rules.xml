@@ -273,13 +273,43 @@
 
   <!-- Config Modified (audit) - CEF ID 546 -->
   <rule id="100356" level="5">
-    <if_sid>100344</if_sid>
-    <match>Config Modified</match>
-    <description>UniFi Network: Configuration modified - $(action)</description>
+    <decoded_as>unifi-config-modified-parent</decoded_as>
+    <description>UniFi Network: $(dstuser) modified setting $(setting) from $(srcip)</description>
     <mitre>
       <id>T1562.001</id>
     </mitre>
     <group>unifi,config,audit,</group>
+  </rule>
+
+  <!-- Security-relevant setting change (IDS/IPS country filter, firewall, threat mgmt) -->
+  <rule id="100357" level="8">
+    <if_sid>100356</if_sid>
+    <field name="setting" type="pcre2">ip_filtering|firewall|threat|honeypot|^ips|^ids|cybersecure</field>
+    <description>UniFi Network: SECURITY setting changed - $(dstuser) modified $(setting) from $(srcip)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>unifi,config,audit,security,</group>
+  </rule>
+
+  <!-- IDS/IPS threat detected and blocked (CEF 201) -->
+  <rule id="100358" level="6">
+    <decoded_as>unifi-threat-parent</decoded_as>
+    <description>UniFi IDS/IPS: threat blocked - $(signature) [$(srcip) -> $(dstip)]</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>unifi,ids,threat,</group>
+  </rule>
+
+  <rule id="100359" level="10">
+    <if_sid>100358</if_sid>
+    <field name="risk" type="pcre2">high|critical</field>
+    <description>UniFi IDS/IPS: HIGH-RISK threat blocked - $(signature) [$(srcip) -> $(dstip)] (policy: $(policy))</description>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+    <group>unifi,ids,threat,alert,</group>
   </rule>
 
   <!-- ================================ -->
