@@ -1,0 +1,24 @@
+<!--
+  Rules for the web-accesslog-malformed decoder (empty/binary requests hitting
+  a public endpoint = Internet scanners). See decoders/web_accesslog_malformed.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100820-100839
+-->
+<group name="web,accesslog,">
+
+  <!-- Malformed request: probe/scanner (TLS handshake on a plaintext port, empty request) -->
+  <rule id="100820" level="5">
+    <decoded_as>web-accesslog-malformed</decoded_as>
+    <description>Web: malformed request from $(srcip) (HTTP $(id)) — probe or scanner</description>
+    <group>web,accesslog,recon,</group>
+  </rule>
+
+  <!-- Repeated scanning from the same source -->
+  <rule id="100821" level="8" frequency="6" timeframe="300">
+    <if_matched_sid>100820</if_matched_sid>
+    <same_srcip />
+    <description>Web: repeated scanning from $(srcip) (6+ malformed requests in 5 min)</description>
+    <group>web,accesslog,recon,attack,</group>
+  </rule>
+
+</group>

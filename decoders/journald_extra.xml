@@ -1,0 +1,126 @@
+<!--
+  Programs collected through journald by Wazuh agents with no stock decoder.
+  Fields are extracted where there is value (zed, CRON, pvescheduler, qemu-ga,
+  librenms-service.py); otherwise a program-only decoder marks the event as
+  decoded and enables per-program rules.
+  Note: <program_name> uses OS_Regex, where \d* does not match — use literal
+  alternations (^python$|^python3$) instead of character classes.
+-->
+
+<!-- Debian/Ubuntu CRON via journald (program_name=CRON, not covered by crond) -->
+<decoder name="crond-journald">
+  <program_name>^CRON$</program_name>
+</decoder>
+
+<decoder name="crond-journald-cmd">
+  <parent>crond-journald</parent>
+  <prematch type="pcre2">^\(\S+\) CMD \(</prematch>
+  <regex type="pcre2">^\((\S+)\) CMD \((.+)\)\s*$</regex>
+  <order>dstuser, command</order>
+</decoder>
+
+<!-- ZED: ZFS events (io/data errors carry real operational value) -->
+<decoder name="zfs-zed">
+  <program_name>^zed$</program_name>
+</decoder>
+
+<decoder name="zfs-zed-event">
+  <parent>zfs-zed</parent>
+  <prematch type="pcre2">^eid=\d+ class=\S+ pool=</prematch>
+  <regex type="pcre2">^eid=(\d+) class=(\S+) pool='([^']+)'(.*)$</regex>
+  <order>zfs.eid, zfs.class, zfs.pool, zfs.detail</order>
+</decoder>
+
+<!-- Proxmox: scheduler (backup jobs) -->
+<decoder name="pvescheduler">
+  <program_name>^pvescheduler$</program_name>
+</decoder>
+
+<decoder name="pvescheduler-backup">
+  <parent>pvescheduler</parent>
+  <prematch type="pcre2">^(?:INFO|ERROR): (?:Starting|Finished) Backup of VM </prematch>
+  <regex type="pcre2">^(INFO|ERROR): (Starting|Finished) Backup of VM (\d+)</regex>
+  <order>level, action, vm.id</order>
+</decoder>
+
+<!-- QEMU guest agent (freeze/thaw during backups) -->
+<decoder name="qemu-ga">
+  <program_name>^qemu-ga$</program_name>
+</decoder>
+
+<decoder name="qemu-ga-call">
+  <parent>qemu-ga</parent>
+  <prematch type="pcre2">^info: guest-\S+ called</prematch>
+  <regex type="pcre2">^info: guest-(\S+) called</regex>
+  <order>qemu.call</order>
+</decoder>
+
+<!-- LibreNMS service (verbose polling: reduce at the source eventually) -->
+<decoder name="librenms-service">
+  <program_name>^librenms-service.py$</program_name>
+</decoder>
+
+<decoder name="librenms-service-msg">
+  <parent>librenms-service</parent>
+  <prematch type="pcre2">^[\w.-]+\(\w+\):</prematch>
+  <regex type="pcre2">^([\w.-]+)\((\w+)\):\s*(.*)$</regex>
+  <order>lnms.component, lnms.level, lnms.detail</order>
+</decoder>
+
+<!-- Program-only decoders: mark decoded, enable per-program rules -->
+<decoder name="lynis-journald">
+  <program_name>^lynis$</program_name>
+</decoder>
+
+<decoder name="smokeping-journald">
+  <program_name>^smokeping$</program_name>
+</decoder>
+
+<decoder name="opensearch-dashboards-journald">
+  <program_name>^opensearch-dashboards$</program_name>
+</decoder>
+
+<decoder name="proxmox-backup-proxy-journald">
+  <program_name>^proxmox-backup-proxy$</program_name>
+</decoder>
+
+<decoder name="pmxcfs-journald">
+  <program_name>^pmxcfs$</program_name>
+</decoder>
+
+<decoder name="corosync-journald">
+  <program_name>^corosync$</program_name>
+</decoder>
+
+<decoder name="snapd-journald">
+  <program_name>^snapd$</program_name>
+</decoder>
+
+<decoder name="dbus-daemon-journald">
+  <program_name>^dbus-daemon$</program_name>
+</decoder>
+
+<decoder name="canonical-livepatch-journald">
+  <program_name>^canonical-livepatch</program_name>
+</decoder>
+
+<decoder name="fwupd-journald">
+  <program_name>^fwupd$</program_name>
+</decoder>
+
+<decoder name="chronyd-journald">
+  <program_name>^chronyd$</program_name>
+</decoder>
+
+<decoder name="sh-journald">
+  <program_name>^sh$</program_name>
+</decoder>
+
+<decoder name="python-journald">
+  <program_name>^python$|^python2$|^python3$</program_name>
+</decoder>
+
+<!-- systemd "env" wrapper (service startup messages on the manager itself) -->
+<decoder name="env-journald">
+  <program_name>^env$</program_name>
+</decoder>

@@ -1,0 +1,20 @@
+<!--
+  Malformed nginx/Apache access-log entries that the stock web-accesslog
+  decoder ignores: empty request ("" 400) or binary payload (TLS handshake
+  sent to a plaintext port). Typical of Internet scanners probing a public
+  endpoint (e.g. an identity provider behind nginx).
+  The prematch requires an empty request or a \x escape so nothing is stolen
+  from the stock decoder.
+-->
+
+<decoder name="web-accesslog-malformed">
+  <prematch type="pcre2">^\S+ - \S+ \[[^\]]+\] "" \d{3} </prematch>
+  <regex type="pcre2">^(\S+) - (\S+) \[([^\]]+)\] "" (\d{3}) (\d+)</regex>
+  <order>srcip, srcuser, http.date, id, http.size</order>
+</decoder>
+
+<decoder name="web-accesslog-malformed">
+  <prematch type="pcre2">^\S+ - \S+ \[[^\]]+\] "\\x</prematch>
+  <regex type="pcre2">^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d{3}) (\d+)</regex>
+  <order>srcip, srcuser, http.date, http.request_raw, id, http.size</order>
+</decoder>

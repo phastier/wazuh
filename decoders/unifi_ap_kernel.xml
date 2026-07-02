@@ -1,0 +1,86 @@
+<!--
+  UniFi access points (U7 family): "kernel:" messages carry NO pid, so they
+  escape the unifi-ap decoder (unifi_ap.xml) whose prematch requires prog[pid].
+  Content seen by decoders (hostname already consumed by the pre-decoder):
+  "9c05d6d99715,U7-Pro-Wall-8.7.9+19401: kernel: ..."
+  Families: DHCP-SM (per-client DHCP state machine), STA_TRACKER (DNS timeouts,
+  roaming), 802.11 auth/assoc (real security value), VLAN tag failures, and a
+  generic wlan fallback.
+  analysisd note: a parent's regex/order is ignored once it has children; the
+  AP identity stays on the syslog source (IP/hostname), and the final catch-all
+  children capture mac/model/firmware for the rest.
+-->
+<decoder name="unifi-ap-kernel">
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+: kernel: </prematch>
+</decoder>
+
+<!-- 802.11 authentication frame received from a station -->
+<decoder name="unifi-ap-kernel-wifi-auth">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">recv auth frame with algorithm</prematch>
+  <regex type="pcre2">vap-(\d+)\((\w+)\): \[([0-9a-fA-F:]+)\]recv auth frame with algorithm (\d+) seq (\d+) rssi:(\d+)</regex>
+  <order>wifi.vap, wifi.iface, station.mac, wifi.auth_alg, wifi.seq, wifi.rssi</order>
+</decoder>
+
+<!-- Station association -->
+<decoder name="unifi-ap-kernel-wifi-assoc">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">station associated at aid</prematch>
+  <regex type="pcre2">vap-(\d+)\((\w+)\): \[([0-9a-fA-F:]+)\]station associated at aid (\d+): (.+)$</regex>
+  <order>wifi.vap, wifi.iface, station.mac, wifi.aid, wifi.caps</order>
+</decoder>
+
+<!-- Per-client DHCP state machine trace -->
+<decoder name="unifi-ap-kernel-dhcp-sm">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">kernel: \[DHCP-SM\] </prematch>
+  <regex type="pcre2">\[DHCP-SM\] ([0-9a-fA-F:]+): (\S+)$</regex>
+  <order>station.mac, dhcp.trace</order>
+</decoder>
+
+<!-- DNS timeouts observed for a station -->
+<decoder name="unifi-ap-kernel-sta-dns">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">kernel: \[STA_TRACKER\] DNS request timed out</prematch>
+  <regex type="pcre2">\[STA: ([0-9a-fA-F:]+)\] \[DNS_TIMEOUTS: (\d+)\]</regex>
+  <order>station.mac, dns.timeouts</order>
+</decoder>
+
+<!-- Roaming without an emitted event -->
+<decoder name="unifi-ap-kernel-sta-roam">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">kernel: \[STA-TRACKER\] STA </prematch>
+  <regex type="pcre2">STA ([0-9a-fA-F:]+) roamed but no event was sent, event_type=(\S+) state=(\d+) anomalies=(\d+)</regex>
+  <order>station.mac, wifi.event_type, wifi.state, wifi.anomalies</order>
+</decoder>
+
+<!-- VLAN assignment failure for a station -->
+<decoder name="unifi-ap-kernel-vlan">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">kernel: unable to assign vlan tag </prematch>
+  <regex type="pcre2">unable to assign vlan tag (\d+) to node ([0-9a-fA-F:]+) \((status: \S+)\)</regex>
+  <order>vlan.tag, station.mac, status</order>
+</decoder>
+
+<!-- Generic wlan: severity, facility, detail -->
+<decoder name="unifi-ap-kernel-wlan">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">kernel: wlan: \[\d+:\w:\w+\] </prematch>
+  <regex type="pcre2">kernel: wlan: \[(\d+):(\w):(\w+)\] (.+)$</regex>
+  <order>wlan.ctx, wlan.level, wlan.facility, wlan.detail</order>
+</decoder>
+
+<!-- Catch-all: AP identity + message -->
+<decoder name="unifi-ap-kernel-generic">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+?-[\d.]+\+\d+: kernel: </prematch>
+  <regex type="pcre2">^([0-9a-fA-F]{12}),(\S+?)-([\d.]+\+\d+): kernel: (.*)$</regex>
+  <order>ap.mac, ap.model, ap.fw, message</order>
+</decoder>
+
+<decoder name="unifi-ap-kernel-generic-nofw">
+  <parent>unifi-ap-kernel</parent>
+  <prematch type="pcre2">^[0-9a-fA-F]{12},\S+: kernel: </prematch>
+  <regex type="pcre2">^([0-9a-fA-F]{12}),(\S+): kernel: (.*)$</regex>
+  <order>ap.mac, ap.model, message</order>
+</decoder>

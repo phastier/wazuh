@@ -1,0 +1,45 @@
+<!--
+  RouterOS: complements mikrotik_custom.xml (which covers sending/received/
+  lease/removing). The pre-decoder already consumed the hostname; prematches
+  run against the remaining content.
+  - assigned/deassigned: IP<->MAC<->hostname binding (the most useful events)
+  - offering lease ... without success: lease refused/ignored by the client
+  - DHCP option dump emitted by debug-level logging (one option per line)
+  - interface link transitions (CCR/CRS, SFP+ flaps)
+-->
+
+<decoder name="mikrotik-dhcp-assign">
+  <prematch type="pcre2">^dhcp\d+ (?:de)?assigned \d+\.\d+\.\d+\.\d+ for </prematch>
+  <regex type="pcre2">^(dhcp\d+) ((?:de)?assigned) (\d+\.\d+\.\d+\.\d+) for ([0-9A-Fa-f:]+)\s*(.*)$</regex>
+  <order>dhcp.server, action, srcip, srcmac, srchost</order>
+</decoder>
+
+<decoder name="mikrotik-dhcp-offering">
+  <prematch type="pcre2">^dhcp\d+ offering lease </prematch>
+  <regex type="pcre2">^(dhcp\d+) offering lease (\d+\.\d+\.\d+\.\d+) for ([0-9A-Fa-f:]+)\s*(.*)$</regex>
+  <order>dhcp.server, srcip, srcmac, dhcp.note</order>
+</decoder>
+
+<decoder name="mikrotik-dhcp-misc">
+  <prematch type="pcre2">^(?:released$|\d+ offers in a row)</prematch>
+</decoder>
+
+<!-- Debug-level DHCP option dump. Whitelisted option names so this never
+     absorbs other sources' "key = value" content. -->
+<decoder name="mikrotik-dhcp-option">
+  <prematch type="pcre2">^\s+(?:ciaddr|yiaddr|siaddr|giaddr|chaddr|secs|flags|xid|Msg-Type|Server-Id|Address-Time|Max-DHCP-Message-Size|Subnet-Mask|Router|Domain-Server|Domain-Name|Parameter-List|Host-Name|Client-Id|Address-Request|Interface-MTU|NTP-Server|Classless-Route|Broadcast-Address|Renewal-Time|Rebinding-Time|Lease-Time|Vendor-Class-Id|Class-Id|Client-FQDN|Vendor-Specific|Boot-File-Name|User-Class|Domain-Search|Time-Offset|WINS-Server|TFTP-Server-Name) = </prematch>
+  <regex type="pcre2">^\s+([\w-]+) = (.*)$</regex>
+  <order>dhcp.option, dhcp.value</order>
+</decoder>
+
+<decoder name="mikrotik-iface-link">
+  <prematch type="pcre2">^\S+ link up \(speed </prematch>
+  <regex type="pcre2">^(\S+) link (up) \(speed ([^,]+), ([^)]+)\)$</regex>
+  <order>iface, status, speed, duplex</order>
+</decoder>
+
+<decoder name="mikrotik-iface-link">
+  <prematch type="pcre2">^\S+ link (?:up|down)$</prematch>
+  <regex type="pcre2">^(\S+) link (up|down)$</regex>
+  <order>iface, status</order>
+</decoder>

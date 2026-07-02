@@ -177,7 +177,7 @@
   </rule>
 
   <!-- Audit log retention / flushing change = potential anti-forensics
-       (ANSSI: modification des stratégies d'audit & effacement de journaux). -->
+       (ANSSI guidance: audit policy tampering and log clearing). -->
   <rule id="100524" level="10">
     <if_sid>100512,100513,100514</if_sid>
     <field name="jamf_object">^Log Flushing$</field>

@@ -1,0 +1,105 @@
+<!--
+  Rules for the journald_extra decoders (zed, pvescheduler, CRON, qemu-ga,
+  librenms-service, chronyd). See decoders/journald_extra.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100840-100859
+-->
+<group name="journald,">
+
+  <!-- ===== ZFS (zed) ===== -->
+  <!-- Base at level 3: class=io_failure contains "failure" and would otherwise
+       be stolen by stock rule 1002 (level 2) -->
+  <rule id="100840" level="3">
+    <decoded_as>zfs-zed</decoded_as>
+    <description>ZFS zed: event</description>
+    <group>zfs,</group>
+  </rule>
+
+  <!-- io/data/io_failure errors: corruption or unavailable device
+       (err=6 ENXIO, err=28 ENOSPC) -->
+  <rule id="100841" level="9">
+    <if_sid>100840</if_sid>
+    <field name="zfs.class" type="pcre2">^(?:io|data|io_failure|checksum)$</field>
+    <description>ZFS: $(zfs.class) error on pool $(zfs.pool) (eid $(zfs.eid)$(zfs.detail))</description>
+    <group>zfs,storage_error,</group>
+  </rule>
+
+  <rule id="100842" level="12" frequency="10" timeframe="60">
+    <if_matched_sid>100841</if_matched_sid>
+    <same_field>zfs.pool</same_field>
+    <description>ZFS: error burst on pool $(zfs.pool) (10+ in 1 min) — pool in distress</description>
+    <group>zfs,storage_error,</group>
+  </rule>
+
+  <!-- Scrubs: informational -->
+  <rule id="100843" level="3">
+    <if_sid>100840</if_sid>
+    <field name="zfs.class" type="pcre2">^scrub_</field>
+    <description>ZFS: $(zfs.class) on pool $(zfs.pool)</description>
+    <group>zfs,scrub,</group>
+  </rule>
+
+  <!-- ===== Proxmox pvescheduler (backup jobs) ===== -->
+  <rule id="100845" level="3">
+    <decoded_as>pvescheduler</decoded_as>
+    <field name="vm.id" type="pcre2">.+</field>
+    <description>Proxmox: $(action) backup of VM $(vm.id)</description>
+    <group>proxmox,backup,</group>
+  </rule>
+
+  <rule id="100846" level="8">
+    <if_sid>100845</if_sid>
+    <field name="level" type="pcre2">^ERROR$</field>
+    <description>Proxmox: ERROR on backup of VM $(vm.id)</description>
+    <group>proxmox,backup,backup_failure,</group>
+  </rule>
+
+  <rule id="100847" level="1">
+    <decoded_as>pvescheduler</decoded_as>
+    <description>Proxmox pvescheduler: event</description>
+    <group>proxmox,</group>
+  </rule>
+
+  <!-- ===== CRON via journald: traced without alerting ===== -->
+  <rule id="100850" level="1">
+    <decoded_as>crond-journald</decoded_as>
+    <description>CRON: $(dstuser) runs $(command)</description>
+    <group>cron,</group>
+  </rule>
+
+  <!-- ===== qemu-ga: freeze/thaw during backups, traced without alerting ===== -->
+  <rule id="100852" level="1">
+    <decoded_as>qemu-ga</decoded_as>
+    <description>QEMU guest agent: guest-$(qemu.call) call</description>
+    <group>proxmox,qemu,</group>
+  </rule>
+
+  <!-- ===== LibreNMS service: polling noise level 1, errors level 5 ===== -->
+  <rule id="100855" level="3">
+    <decoded_as>librenms-service</decoded_as>
+    <description>LibreNMS: $(lnms.component) ($(lnms.level)) $(lnms.detail)</description>
+    <group>librenms,</group>
+  </rule>
+
+  <rule id="100856" level="5">
+    <if_sid>100855</if_sid>
+    <field name="lnms.level" type="pcre2">^(?:ERROR|CRITICAL|WARNING)$</field>
+    <description>LibreNMS: $(lnms.component) at $(lnms.level) — $(lnms.detail)</description>
+    <group>librenms,monitoring_error,</group>
+  </rule>
+
+  <rule id="100857" level="1">
+    <if_sid>100855</if_sid>
+    <field name="lnms.level" type="pcre2">^INFO$</field>
+    <description>LibreNMS: $(lnms.component) (INFO) — polling noise</description>
+    <group>librenms,</group>
+  </rule>
+
+  <!-- ===== chronyd: traced without alerting ===== -->
+  <rule id="100858" level="1">
+    <decoded_as>chronyd-journald</decoded_as>
+    <description>chronyd: NTP event</description>
+    <group>ntp,</group>
+  </rule>
+
+</group>

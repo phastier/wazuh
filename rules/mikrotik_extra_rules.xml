@@ -1,0 +1,57 @@
+<!--
+  Rules for the mikrotik_dhcp_extra decoders (DHCP assigned/deassigned,
+  debug option dump, interface links). See decoders/mikrotik_dhcp_extra.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100800-100819
+-->
+<group name="mikrotik,">
+
+  <!-- Lease assignment / release: IP<->MAC<->hostname inventory -->
+  <rule id="100800" level="3">
+    <decoded_as>mikrotik-dhcp-assign</decoded_as>
+    <description>MikroTik DHCP: $(action) $(srcip) for $(srcmac) $(srchost)</description>
+    <group>mikrotik,dhcp,</group>
+  </rule>
+
+  <!-- Lease offered without success: client not completing (conflict, roamed away...) -->
+  <rule id="100801" level="4">
+    <decoded_as>mikrotik-dhcp-offering</decoded_as>
+    <description>MikroTik DHCP: lease $(srcip) offered to $(srcmac) without success</description>
+    <group>mikrotik,dhcp,</group>
+  </rule>
+
+  <!-- Debug-mode DHCP option dump: traced without alerting (cut at the source) -->
+  <rule id="100802" level="1">
+    <decoded_as>mikrotik-dhcp-option</decoded_as>
+    <description>MikroTik DHCP debug: option $(dhcp.option) = $(dhcp.value)</description>
+    <group>mikrotik,dhcp,debug,</group>
+  </rule>
+
+  <rule id="100803" level="1">
+    <decoded_as>mikrotik-dhcp-misc</decoded_as>
+    <description>MikroTik DHCP: flow message (released / offers in a row)</description>
+    <group>mikrotik,dhcp,debug,</group>
+  </rule>
+
+  <!-- Interface links (SFP+/ether): down alerts, up informs, flapping escalates -->
+  <rule id="100804" level="4">
+    <decoded_as>mikrotik-iface-link</decoded_as>
+    <description>MikroTik: link $(iface) $(status)</description>
+    <group>mikrotik,link,</group>
+  </rule>
+
+  <rule id="100805" level="3">
+    <if_sid>100804</if_sid>
+    <status>^up$</status>
+    <description>MikroTik: link $(iface) restored ($(speed), $(duplex))</description>
+    <group>mikrotik,link,</group>
+  </rule>
+
+  <rule id="100806" level="8" frequency="6" timeframe="300">
+    <if_matched_sid>100804</if_matched_sid>
+    <same_field>iface</same_field>
+    <description>MikroTik: link $(iface) unstable (6+ transitions in 5 min) — flapping</description>
+    <group>mikrotik,link,flapping,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,74 @@
+<!--
+  UniFi adopt-managed devices that log WITHOUT a syslog timestamp: the line
+  starts with the hostname, so the BSD pre-decoder extracts nothing at all.
+  Format: "HOSTNAME macaddress,MODEL-FIRMWARE: SUBSYSTEM: message"
+  Covers USW-Flex 2.5G switches and UPS Tower units (no decoder existed).
+  analysisd note: a parent's regex/order is ignored once it has children; the
+  final catch-all children capture the device identity for remaining lines.
+-->
+<decoder name="unifi-usw-flex">
+  <prematch type="pcre2">^\S+ [0-9a-fA-F]{12},USW-Flex-</prematch>
+</decoder>
+
+<decoder name="unifi-usw-flex-inform">
+  <parent>unifi-usw-flex</parent>
+  <prematch type="pcre2">: MCA: Send normal inform to \[</prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),(USW-Flex-\S+?)-([\d.]+): MCA: Send normal inform to \[(\S+)\]</regex>
+  <order>device.name, device.mac, device.model, device.fw, url</order>
+</decoder>
+
+<decoder name="unifi-usw-flex-port">
+  <parent>unifi-usw-flex</parent>
+  <prematch type="pcre2">: switch: [Pp]ort:?\s*\d+ link </prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),(USW-Flex-\S+?)-([\d.]+): switch: [Pp]ort:?\s*(\d+) link (\w+)</regex>
+  <order>device.name, device.mac, device.model, device.fw, port, status</order>
+</decoder>
+
+<decoder name="unifi-usw-flex-stp">
+  <parent>unifi-usw-flex</parent>
+  <prematch type="pcre2">: STP: port \d+ </prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),(USW-Flex-\S+?)-([\d.]+): STP: port (\d+) (.+)$</regex>
+  <order>device.name, device.mac, device.model, device.fw, port, stp.detail</order>
+</decoder>
+
+<!-- Catch-all USW-Flex: device identity + message -->
+<decoder name="unifi-usw-flex-generic">
+  <parent>unifi-usw-flex</parent>
+  <prematch type="pcre2">^\S+ [0-9a-fA-F]{12},USW-Flex-</prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),(USW-Flex-\S+?)-([\d.]+): (.*)$</regex>
+  <order>device.name, device.mac, device.model, device.fw, message</order>
+</decoder>
+
+<decoder name="unifi-ups">
+  <prematch type="pcre2">^\S+ [0-9a-fA-F]{12},UPS TOWER-</prematch>
+</decoder>
+
+<!-- Controller inform failures (HTTP 503 Server Busy seen in debug mode) -->
+<decoder name="unifi-ups-inform-http">
+  <parent>unifi-ups</parent>
+  <prematch type="pcre2">MCA: HTTP Status = \d+</prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),UPS TOWER-([\d.]+): MCA: HTTP Status = (\d+), content_length = (\d+)</regex>
+  <order>device.name, device.mac, device.fw, status, http.content_length</order>
+</decoder>
+
+<decoder name="unifi-ups-inform-fail">
+  <parent>unifi-ups</parent>
+  <prematch type="pcre2">MCA: failed reason\(\d+\): </prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),UPS TOWER-([\d.]+): MCA: failed reason\((\d+)\): (.+?) \((\S+)\)$</regex>
+  <order>device.name, device.mac, device.fw, mca.rc, mca.reason, url</order>
+</decoder>
+
+<decoder name="unifi-ups-inform-retry">
+  <parent>unifi-ups</parent>
+  <prematch type="pcre2">MCA: inform failed #\d+ </prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),UPS TOWER-([\d.]+): MCA: inform failed #(\d+) \(last inform: (\d+) seconds ago\), rc=(\d+)</regex>
+  <order>device.name, device.mac, device.fw, mca.attempt, mca.last_inform_s, mca.rc</order>
+</decoder>
+
+<!-- Catch-all UPS: device identity + message -->
+<decoder name="unifi-ups-generic">
+  <parent>unifi-ups</parent>
+  <prematch type="pcre2">^\S+ [0-9a-fA-F]{12},UPS TOWER-</prematch>
+  <regex type="pcre2">^(\S+) ([0-9a-fA-F]{12}),UPS TOWER-([\d.]+): (.*)$</regex>
+  <order>device.name, device.mac, device.fw, message</order>
+</decoder>

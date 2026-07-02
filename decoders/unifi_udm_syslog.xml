@@ -1,0 +1,77 @@
+<!--
+  UniFi UDM (UniFi OS) system syslog in debug mode: the hostname is DOUBLED in
+  the frame ("UDM-Pro-Max-AC UDM-Pro-Max-AC prog[pid]: msg"), so the BSD syslog
+  pre-decoder never extracts a program_name and no stock decoder matches
+  (systemd, sudo, earlyoom, ips-update.sh... all silently undecoded).
+  The parent re-extracts program/pid from the message body. Anchored on ^UDM-
+  to cover UDM Pro Max / UDM SE without absorbing other sources.
+  analysisd note: a parent's regex/order is IGNORED once it has children, so
+  every child captures program/pid itself, with catch-all children at the end.
+-->
+
+<decoder name="unifi-udm-sys">
+  <prematch type="pcre2">^UDM-\S+ \S+?(?:\[\d+\])?: </prematch>
+</decoder>
+
+<!-- IPS list update failure (tor.list.gz, alien.list.gz...): worth alerting -->
+<decoder name="unifi-udm-sys-ips-update-fail">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> ips-update\.sh\[\d+\]: File checksum failed</prematch>
+  <regex type="pcre2"> (ips-update\.sh)\[(\d+)\]: (File checksum failed) for (\S+?)\.?$</regex>
+  <order>program, pid, status, ips.file</order>
+</decoder>
+
+<decoder name="unifi-udm-sys-ips-update">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> ips-update\.sh\[\d+\]: </prematch>
+  <regex type="pcre2"> (ips-update\.sh)\[(\d+)\]: (.*)$</regex>
+  <order>program, pid, message</order>
+</decoder>
+
+<!-- sudo on the UDM (no TTY in this format): privilege escalation audit trail -->
+<decoder name="unifi-udm-sys-sudo">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> sudo\[\d+\]:\s+\S+ : .*COMMAND=</prematch>
+  <regex type="pcre2"> (sudo)\[(\d+)\]:\s+(\S+) : .*?PWD=(\S+) ; USER=(\S+) ; COMMAND=(.+)$</regex>
+  <order>program, pid, srcuser, pwd, dstuser, command</order>
+</decoder>
+
+<!-- earlyoom: controller memory pressure telemetry -->
+<decoder name="unifi-udm-sys-earlyoom">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> earlyoom\[\d+\]: mem avail:</prematch>
+  <regex type="pcre2"> (earlyoom)\[(\d+)\]: mem avail:\s+(\d+) of\s+(\d+) MiB \(\s*([\d.]+)%\)</regex>
+  <order>program, pid, mem.avail_mib, mem.total_mib, mem.avail_pct</order>
+</decoder>
+
+<!-- systemd: unit completion (Succeeded/Failed), then lifecycle actions.
+     [^.]* keeps the regex from failing on the trailing period — a failing
+     child regex after a matching prematch stops the sibling chain. -->
+<decoder name="unifi-udm-sys-systemd-unit">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> systemd\[\d+\]: \S+: (?:Succeeded|Failed)</prematch>
+  <regex type="pcre2"> (systemd)\[(\d+)\]: (\S+): (Succeeded|Failed[^.]*)</regex>
+  <order>program, pid, systemd.unit, status</order>
+</decoder>
+
+<decoder name="unifi-udm-sys-systemd-action">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2"> systemd\[\d+\]: (?:Started|Starting|Stopped|Stopping|Finished|Reached|Listening|Closed) </prematch>
+  <regex type="pcre2"> (systemd)\[(\d+)\]: (Started|Starting|Stopped|Stopping|Finished|Reached|Listening|Closed) (.+?)\.*$</regex>
+  <order>program, pid, systemd.verb, systemd.unit_desc</order>
+</decoder>
+
+<!-- Catch-all: everything else, with or without a pid -->
+<decoder name="unifi-udm-sys-prog">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2">^UDM-\S+ \S+\[\d+\]: </prematch>
+  <regex type="pcre2">^UDM-\S+ (\S+)\[(\d+)\]: (.*)$</regex>
+  <order>program, pid, message</order>
+</decoder>
+
+<decoder name="unifi-udm-sys-prog-nopid">
+  <parent>unifi-udm-sys</parent>
+  <prematch type="pcre2">^UDM-\S+ [^\s\[]+: </prematch>
+  <regex type="pcre2">^UDM-\S+ ([^\s\[]+): (.*)$</regex>
+  <order>program, message</order>
+</decoder>

@@ -1,0 +1,80 @@
+<!--
+  Rules for the unifi-ap-kernel decoder (kernel: lines from UniFi U7 APs).
+  See decoders/unifi_ap_kernel.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100750-100769
+-->
+<group name="unifi,ap_kernel,">
+
+  <!-- Base at level 3 (must outrank stock rule 1002 level 2 which would steal
+       lines containing "failed"/"error"); noise reclassified to level 1 below -->
+  <rule id="100750" level="3">
+    <decoded_as>unifi-ap-kernel</decoded_as>
+    <description>UniFi AP: kernel event</description>
+    <group>unifi,ap_kernel,</group>
+  </rule>
+
+  <!-- 802.11 authentication frame received from a station -->
+  <rule id="100751" level="3">
+    <if_sid>100750</if_sid>
+    <field name="wifi.auth_alg" type="pcre2">.+</field>
+    <description>WiFi: 802.11 authentication frame from $(station.mac) on $(wifi.iface) (algo $(wifi.auth_alg), rssi $(wifi.rssi))</description>
+    <group>unifi,ap_kernel,wifi,authentication,</group>
+  </rule>
+
+  <!-- Station association -->
+  <rule id="100752" level="3">
+    <if_sid>100750</if_sid>
+    <field name="wifi.aid" type="pcre2">.+</field>
+    <description>WiFi: station $(station.mac) associated on $(wifi.iface) (aid $(wifi.aid))</description>
+    <group>unifi,ap_kernel,wifi,authentication_success,</group>
+  </rule>
+
+  <!-- DNS timeouts observed for a station: client-side network trouble -->
+  <rule id="100753" level="4">
+    <if_sid>100750</if_sid>
+    <field name="dns.timeouts" type="pcre2">.+</field>
+    <description>WiFi: DNS requests timing out for station $(station.mac) ($(dns.timeouts) timeouts)</description>
+    <group>unifi,ap_kernel,wifi,dns,</group>
+  </rule>
+
+  <!-- VLAN assignment failure for a station: segmentation issue -->
+  <rule id="100754" level="4">
+    <if_sid>100750</if_sid>
+    <field name="vlan.tag" type="pcre2">.+</field>
+    <description>WiFi: failed to assign VLAN $(vlan.tag) to station $(station.mac) ($(status))</description>
+    <group>unifi,ap_kernel,wifi,vlan,</group>
+  </rule>
+
+  <!-- DHCP state machine trace: per-station debug, traced without alerting -->
+  <rule id="100755" level="1">
+    <if_sid>100750</if_sid>
+    <field name="dhcp.trace" type="pcre2">.+</field>
+    <description>WiFi: DHCP-SM trace for $(station.mac)</description>
+    <group>unifi,ap_kernel,wifi,dhcp,</group>
+  </rule>
+
+  <!-- Roaming without an emitted event (tracking anomaly, informational) -->
+  <rule id="100756" level="2">
+    <if_sid>100750</if_sid>
+    <field name="wifi.event_type" type="pcre2">.+</field>
+    <description>WiFi: station $(station.mac) roamed without an emitted event (state $(wifi.state))</description>
+    <group>unifi,ap_kernel,wifi,roaming,</group>
+  </rule>
+
+  <!-- Generic wlan messages: errors/warnings alert, the rest is traced -->
+  <rule id="100757" level="3">
+    <if_sid>100750</if_sid>
+    <field name="wlan.level" type="pcre2">^[EW]$</field>
+    <description>WiFi: wlan level-$(wlan.level) message — $(wlan.detail)</description>
+    <group>unifi,ap_kernel,wifi,</group>
+  </rule>
+
+  <rule id="100758" level="1">
+    <if_sid>100750</if_sid>
+    <field name="wlan.facility" type="pcre2">.+</field>
+    <description>WiFi: informational wlan message ($(wlan.facility))</description>
+    <group>unifi,ap_kernel,wifi,</group>
+  </rule>
+
+</group>

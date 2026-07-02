@@ -1,6 +1,8 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, and **Jamf Pro (on-prem MDM)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max / UDM SE, APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+
+The design philosophy is **decode everything, then triage by level**: every event type a device can emit gets decoded and traced (level 1 = archived without alerting), and only meaningful events alert (level 3+). Nothing is silently dropped — noise reduction happens at the source or at the rule level, never by leaving events undecoded.
 
 Developed and tested on **Wazuh 4.14.3** by [Astier Consulting](https://www.astier-consulting.fr) — Apple/IT consulting with 30 years of datacenter management experience.
 
@@ -23,6 +25,9 @@ Custom decoders and rules — nothing usable existed for RouterOS 7.x BSD syslog
 
 - **Firewall**: DROP IPv4/IPv6, invalid forward, INPUT protection
 - **DHCP**: Server operations (discover, offer, request, ack, lease, removal)
+- **DHCP bindings**: `assigned`/`deassigned` with IP↔MAC↔hostname extraction (live inventory), `offering lease ... without success` (client not completing)
+- **DHCP debug option dump**: one-option-per-line debug output decoded with a whitelisted option list (`mikrotik_dhcp_extra.xml`)
+- **Interface links**: SFP+/ether link up/down with speed and duplex, plus a **flapping correlation rule** (6+ transitions in 5 min → level 8)
 - **Authentication**: Login/logout with external IP detection
 - **Correlation rules**: Port scan detection, brute force alerts
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1133 (External Remote Services), T1110 (Brute Force)
@@ -43,6 +48,9 @@ Custom decoders and rules — the existing BNC community rules are broken.
 - **UPS monitoring**: Battery power and AC restore events with battery percentage extraction (level 10 critical alert)
 - **Infrastructure alerts**: Poor AP link speed detection
 - **Noise suppression**: ubios-udapi-server, DPI stats, system events filtered at level 0
+- **UDM system syslog in debug mode** (`unifi_udm_syslog.xml`): in debug mode the UDM *doubles its hostname* in every system line, which silently breaks `program_name` pre-decoding — sudo, systemd, earlyoom, `ips-update.sh` all go undecoded. Dedicated decoders restore: **sudo audit trail** (who ran what as root), **IPS list update failures** (`tor.list.gz`, `alien.list.gz` checksum errors — level 5, repeated failures level 10), **memory pressure** (earlyoom telemetry with a <10% level-8 alert), systemd unit failures
+- **AP kernel events** (`unifi_ap_kernel.xml`): `kernel:` lines carry no PID and escape the hostapd decoders. Covers **802.11 auth/assoc frames** (station MAC, RSSI, algorithm — real security value), per-client **DHCP state machine** traces, **DNS timeout tracking** per station, **VLAN assignment failures**, and generic wlan errors/warnings
+- **USW-Flex 2.5G & UPS Tower** (`unifi_mca.xml`): these adopt-managed devices log **without a syslog timestamp** (the line starts with the hostname), so the pre-decoder extracts nothing and every event was undecoded. Covers MCA informs, **controller inform failures** (HTTP 4xx/5xx with a persistent-failure correlation → level 7), port link up/down, STP transitions
 
 ### Fortinet FortiGate
 Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work well). The focus here is **noise suppression and VPN monitoring** — in environments with Apple devices, Bonjour/mDNS generates thousands of deny logs per minute that bury real security events.
@@ -52,6 +60,19 @@ Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work we
 - **VPN IPsec monitoring**: Alerts on denied traffic through site-to-site tunnels (routing issues, unauthorized access attempts). Filters on `action="deny"` to avoid false positives from legitimate ZTNA traffic
 - **System events**: Performance stats, AV database updates, disk log rotation
 - **Correlation**: Repeated VPN denies trigger higher-level alerts for investigation
+
+### Linux / Proxmox hosts (journald)
+Decoders and rules for common programs collected by Wazuh agents through journald and left undecoded by the stock ruleset (`journald_extra.xml`):
+
+- **ZFS zed**: `eid/class/pool` extraction — **io/data/checksum errors at level 9**, error burst (10+ in 1 min on the same pool) at level 12, scrubs informational. Catches real incidents: ENOSPC/ENXIO bursts show up here before anything else complains
+- **Proxmox pvescheduler**: backup job start/finish per VM (level 3), backup errors (level 8)
+- **Debian/Ubuntu CRON via journald**: the journald `program_name` is `CRON`, which the stock `crond` decoder does not match — decoded with user + command extraction
+- **qemu-ga**: guest fsfreeze/fsthaw calls during backups
+- **LibreNMS service**: component/level/message extraction — polling INFO reclassified to level 1, ERROR/CRITICAL/WARNING at level 5
+- Program-only decoders for chronyd, snapd, dbus-daemon, pmxcfs, corosync, canonical-livepatch, fwupd, smokeping, opensearch-dashboards, proxmox-backup-proxy, and more — every journald event ends up decoded and traceable
+
+### Web access log — scanner detection
+Malformed nginx/Apache access-log entries that the stock `web-accesslog` decoder ignores (`web_accesslog_malformed.xml`): empty requests (`"" 400`) and binary payloads (TLS handshakes sent to a plaintext port). These are exactly what Internet scanners generate against public endpoints. Each probe alerts at level 5 with `srcip` extracted; 6+ probes from the same source in 5 minutes escalate to level 8.
 
 ### Jamf Pro (on-prem MDM)
 Custom decoders and rules for Jamf Pro's application logs — no community Wazuh decoders exist for these file-based logs. Jamf Pro does **not** write to syslog; logs are collected from the host with the Wazuh agent.
@@ -113,13 +134,34 @@ These are hard-won lessons from building these integrations:
 
 15. **UniFi AP (hostapd) events collide with the built-in `symantec-av` decoder** — Access points/switches send syslog as `<12-hex-MAC>,<model>: hostapd[..]: ... STA <mac> IEEE 802.11: associated|disassociated`. That leading `<12 hex>,` matches the built-in `symantec-av` prematch (`^\w{12},`); its own regex then fails (our prefix is hex, not the digits-CSV it expects). On some Wazuh builds the engine falls through to the next decoder so `unifi-ap` matches, but on others (observed on 4.14.5) it **locks onto `symantec-av` on the prematch alone** — AP client connect/disconnect events get mis-labelled "symantec-av" (fires rule 7300) and `unifi-ap` never runs. **Two managers on the same version can behave differently here** (decoder_dir ordering does NOT override it). Fix — upgrade-safe, no base-file edits — exclude the symantec decoder in `ossec.conf`: `<decoder_exclude>0330-symantec_decoders.xml</decoder_exclude>` plus the matching `<rule_exclude>` lines. Symptom to watch for: "who connects to which AP/switch" events appear under Symantec AV instead of UniFi.
 
+16. **A parent decoder's `<regex>`/`<order>` is IGNORED once it has children** — analysisd never applies the parent's own field extraction when `<parent>` children exist, whether a child matches or not. Pattern that works: parent = `<prematch>` only; every child captures all the fields it needs (including "parent-level" identity like program/pid or device MAC); finish with one or two catch-all children that capture identity + message for lines no specific child handles.
+
+17. **A child whose prematch matches but whose regex fails STOPS the sibling chain** — the remaining children are never tried and the event stays field-less. A trailing period is enough to trigger this (`Succeeded.` vs a regex ending in `(Succeeded|Failed.*)$`). Keep child regex endings tolerant: `[^.]*`, `\.?$`.
+
+18. **Root rules are evaluated by descending level — stock rule 1002 steals your events** — a level-1 base rule on `decoded_as` loses every log containing `failed`/`error` to the built-in "Unknown problem" rule 1002 (level 2). Put base `decoded_as` rules at level 3 and reclassify noise down to level 1 through child rules; never anchor a rule tree on a level-1/2 root.
+
+19. **`<field name="status">` is rejected in rules** — `status` (like `action`, `id`, `srcip`...) is a *static* field; analysisd fails to load the rule with "Field 'status' is static". Match static fields with their dedicated element (`<status>^down$</status>`, OS_Match syntax — no `\d` classes) or fall back to `<match>` on the raw log.
+
+20. **`<program_name>` uses OS_Regex where `\d*` does not match** — `^python\d*$` silently matches nothing. Use literal alternations: `^python$|^python2$|^python3$`.
+
+21. **UDM debug syslog doubles the hostname and kills `program_name` pre-decoding** — in debug mode every UDM *system* line reads `UDM-Pro-Max-AC UDM-Pro-Max-AC prog[pid]: msg`; the BSD pre-decoder consumes the first hostname, chokes on the second, and never sets `program_name` — so sudo/systemd/earlyoom events silently stop matching the stock decoders. `unifi_udm_syslog.xml` re-extracts program/pid from the message body (anchored `^UDM-` so it also covers UDM SE).
+
+22. **Some UniFi devices log with NO syslog timestamp** — USW-Flex 2.5G switches and UPS Tower units send `HOSTNAME <mac>,<model>-<fw>: SUBSYS: msg` with no timestamp at all; the pre-decoder extracts nothing and prematches must match from the raw line start (`^\S+ [0-9a-fA-F]{12},...`).
+
+
 ## Installation
 
 ### 1. Copy decoders
 ```bash
 cp decoders/mikrotik_custom.xml /var/ossec/etc/decoders/
+cp decoders/mikrotik_dhcp_extra.xml /var/ossec/etc/decoders/   # DHCP bindings + debug dump + iface links
 cp decoders/ubiquiti.xml /var/ossec/etc/decoders/
 cp decoders/unifi_ap.xml /var/ossec/etc/decoders/      # UniFi AP hostapd (client assoc/disassoc) - see learning #15
+cp decoders/unifi_ap_kernel.xml /var/ossec/etc/decoders/       # UniFi AP kernel: 802.11 auth/assoc, DHCP-SM, DNS timeouts
+cp decoders/unifi_udm_syslog.xml /var/ossec/etc/decoders/      # UDM system syslog in debug mode (doubled hostname) - see learning #21
+cp decoders/unifi_mca.xml /var/ossec/etc/decoders/             # USW-Flex 2.5G + UPS Tower (no syslog timestamp) - see learning #22
+cp decoders/journald_extra.xml /var/ossec/etc/decoders/        # zed, pvescheduler, CRON, qemu-ga, LibreNMS...
+cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner probes on public endpoints
 # Only if you use UniFi Protect (CEF format):
 cp decoders/unifi.xml /var/ossec/etc/decoders/
 ```
@@ -127,8 +169,14 @@ cp decoders/unifi.xml /var/ossec/etc/decoders/
 ### 2. Copy rules
 ```bash
 cp rules/mikrotik_rules.xml /var/ossec/etc/rules/
+cp rules/mikrotik_extra_rules.xml /var/ossec/etc/rules/        # DHCP bindings, link flapping (100800-100806)
 cp rules/unifi_rules.xml /var/ossec/etc/rules/
 cp rules/unifi_ap_rules.xml /var/ossec/etc/rules/      # UniFi AP hostapd rules (100368-100370)
+cp rules/unifi_ap_kernel_rules.xml /var/ossec/etc/rules/       # AP kernel events (100750-100758)
+cp rules/unifi_udm_sys_rules.xml /var/ossec/etc/rules/         # UDM system: sudo, IPS updates, earlyoom (100700-100708)
+cp rules/unifi_mca_rules.xml /var/ossec/etc/rules/             # USW-Flex + UPS Tower (100770-100778)
+cp rules/journald_extra_rules.xml /var/ossec/etc/rules/        # zed, pvescheduler, CRON... (100840-100858)
+cp rules/web_malformed_rules.xml /var/ossec/etc/rules/         # scanner detection (100820-100821)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -248,6 +296,12 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100510-100516 | Jamf Pro | Change management (READ surfaced at low level + object name, sensitive objects + FileVault PRK escalated, create/update/delete) |
 | 100520-100525 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM commands incl. destructive erase/wipe, security settings, audit log retention) |
 | 100530-100534 | Jamf Pro | Instance install/upgrade (upgrade steps, disk warning, install failure) |
+| 100700-100708 | UniFi | UDM system syslog (sudo trail, IPS list update failures + repeat escalation L10, earlyoom memory <10% L8, systemd unit failures) |
+| 100750-100758 | UniFi | AP kernel (802.11 auth/assoc, DNS timeouts, VLAN failures, DHCP-SM traces, wlan errors) |
+| 100770-100778 | UniFi | USW-Flex 2.5G + UPS Tower (port links, inform failures + persistence L7, heartbeats) |
+| 100800-100806 | MikroTik | DHCP bindings (assigned/deassigned/offering), debug option dump, iface links + flapping L8 |
+| 100820-100821 | Web | Malformed requests / scanner probes (single L5, repeated L8) |
+| 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (error L8), CRON, qemu-ga, LibreNMS, chronyd |
 
 ## Decoded fields
 
@@ -342,6 +396,60 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `data` | Battery remaining | `93.0%` |
 | `action` | Full message | `UPS Bureau Cave has lost AC power...` |
 
+### UniFi UDM system syslog (debug mode)
+| Field | Content | Example |
+|-------|---------|---------|
+| `program` / `pid` | Program re-extracted from the doubled-hostname line | `sudo` / `21901` |
+| `srcuser` / `dstuser` | sudo: invoking user / target user | `uid` / `root` |
+| `command` | sudo: command executed | `/usr/lib/uid-agent/scripts/apps_info.sh` |
+| `ips.file` | IPS list whose update failed | `/run/ips/rules/tor.list.gz` |
+| `mem.avail_pct` | earlyoom: available memory % | `35.05` |
+| `systemd.unit` / `status` | systemd unit and outcome | `wifiman-proxy-cert.service` / `Succeeded` |
+
+### UniFi AP kernel events
+| Field | Content | Example |
+|-------|---------|---------|
+| `station.mac` | Client station MAC | `aa:bb:cc:dd:ee:01` |
+| `wifi.iface` / `wifi.vap` | Radio interface / VAP index | `wifi2ap8` / `4` |
+| `wifi.auth_alg` / `wifi.rssi` | 802.11 auth algorithm / RSSI | `2` / `52` |
+| `dns.timeouts` | DNS timeouts counted for the station | `4` |
+| `vlan.tag` | VLAN that failed to assign | `1` |
+| `dhcp.trace` | DHCP state machine trace | `d-10-o-30-r-10-a` |
+| `wlan.level` / `wlan.facility` | wlan message severity / facility | `E` / `ANY` |
+
+### UniFi USW-Flex / UPS Tower (MCA)
+| Field | Content | Example |
+|-------|---------|---------|
+| `device.name` | Device hostname | `USWFlex25GOffice` |
+| `device.mac` / `device.model` / `device.fw` | Identity | `942a6f...` / `USW-Flex-2.5G-5` / `7.4.2.1039` |
+| `port` / `status` | Switch port and link state | `2` / `down` |
+| `status` (UPS) | Inform HTTP status | `503` |
+| `mca.rc` / `mca.reason` | Inform failure code / reason | `7` / `Server Busy` |
+| `url` | Controller inform URL | `http://192.168.0.2:8080/inform` |
+
+### MikroTik DHCP bindings
+| Field | Content | Example |
+|-------|---------|---------|
+| `dhcp.server` | DHCP server instance | `dhcp1` |
+| `action` | Binding operation | `assigned` / `deassigned` |
+| `srcip` / `srcmac` / `srchost` | Bound IP / MAC / hostname | `192.168.0.33` / `00:24:E4:...` / `laptop` |
+| `dhcp.option` / `dhcp.value` | Debug dump option | `Host-Name` / `"Mac"` |
+| `iface` / `status` / `speed` | Link transitions | `sfp-sfpplus11` / `down` / `10G` |
+
+### Web malformed requests (scanner probes)
+| Field | Content | Example |
+|-------|---------|---------|
+| `srcip` | Scanner source IP | `203.0.113.66` |
+| `id` | HTTP status | `400` |
+| `http.request_raw` | Raw binary payload (TLS handshake bytes) | `\x16\x03\x01...` |
+
+### ZFS zed (journald)
+| Field | Content | Example |
+|-------|---------|---------|
+| `zfs.class` | Event class | `io` / `data` / `io_failure` / `scrub_finish` |
+| `zfs.pool` | Pool name | `rpool` |
+| `zfs.eid` / `zfs.detail` | Event id / raw detail (err=6 ENXIO, err=28 ENOSPC...) | `6743` / `err=28 ...` |
+
 ### FortiGate (built-in decoder fields)
 Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`, `srcport`, `dstport`, `action`, `policyid`, `service`, `srcintf`, `dstintf`, `devname`, `logid`, `level`, and more. Our custom rules add context through enhanced descriptions that surface VPN tunnel names and traffic patterns.
 
@@ -410,16 +518,38 @@ echo '[jdoe (ID: 5)] [CREATE] [Account] [2026-06-29T10:02:00.791+0200]' | /var/o
 
 # Jamf Pro: API client secret deleted (level 12, critical)
 echo '[jdoe (ID: 5)] [DELETE] [API Client - Client Secret] [2026-06-29T10:02:00.772+0200]' | /var/ossec/bin/wazuh-logtest
+
+# UDM system (debug mode, doubled hostname): IPS list update failure (level 5)
+echo 'Jul  1 00:51:16 UDM-Pro-Max-AC UDM-Pro-Max-AC ips-update.sh[2238648]: File checksum failed for /run/ips/rules/tor.list.gz.' | /var/ossec/bin/wazuh-logtest
+
+# UDM system: sudo command trail (level 3)
+echo 'Jul  1 18:55:15 UDM-Pro-Max-AC UDM-Pro-Max-AC sudo[21901]:      uid : PWD=/data ; USER=root ; COMMAND=/usr/bin/id' | /var/ossec/bin/wazuh-logtest
+
+# UniFi AP kernel: 802.11 authentication frame (level 3)
+echo 'Jul  1 10:06:47 AP-Office 9c05d6000001,U7-Pro-Wall-8.7.9+19401: kernel: wlan: [0:I:ANY] [UNSPECIFIED] vap-4(wifi2ap8): [aa:bb:cc:dd:ee:01]recv auth frame with algorithm 2 seq 1 rssi:52 minrssi:0' | /var/ossec/bin/wazuh-logtest
+
+# UPS Tower (no syslog timestamp): controller inform failure (level 4)
+echo 'UPS-Office 847848000001,UPS TOWER-1.5.0.378: MCA: HTTP Status = 503, content_length = 0' | /var/ossec/bin/wazuh-logtest
+
+# MikroTik DHCP binding (level 3)
+echo 'Jul  1 00:33:20 router dhcp1 assigned 192.168.0.33 for 00:24:E4:51:0D:F8 laptop' | /var/ossec/bin/wazuh-logtest
+
+# Scanner probe on a public endpoint (level 5)
+echo '203.0.113.66 - - [01/Jul/2026:14:33:39 +0200] "" 400 0 "-" "-"' | /var/ossec/bin/wazuh-logtest
+
+# ZFS zed error (level 9)
+echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' size=8192 offset=839904612352 priority=0 err=6 flags=0x200080 bookmark=259:128:0:11611' | /var/ossec/bin/wazuh-logtest
 ```
 
 ## Tested environment
 
 - Wazuh 4.14.5 (3-VM cluster: server, dashboard, indexer)
-- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x
-- Ubiquiti UDM Pro Max / UDM SE running UniFi Network 10.4–10.5 and UniFi Protect 7.x — plus access points (U6-IW, U7-Pro, UDB) and switches (USW-Pro-Max-48, USW-Flex 2.5G) on firmware 6.x–8.x
+- MikroTik CCR2004-1G-12S+2XS running RouterOS 7.x (plus CRS317/CRS305 switches)
+- Ubiquiti UDM Pro Max / UDM SE running UniFi Network 10.4–10.5 and UniFi Protect 7.x — plus access points (U6-IW, U7-Pro, U7-Pro-Wall, U7-Pro-Max, U7-Mesh, UDB), switches (USW-Pro-Max-48, USW-Enterprise-24-PoE, USW-Flex 2.5G) and UPS Tower units on firmware 6.x–8.x
 - Fortinet FortiGate 60E running FortiOS 7.x
-- Proxmox VE
+- Proxmox VE + Proxmox Backup Server (journald collection through Wazuh agents)
 - Syslog transport: UDP/514 via rsyslog
+- Decoder/rule validation: a survey of 10.7M archived events over 48h with device syslog set to debug — coverage measured at **100% decoded** (0 events without a decoder) after this ruleset
 
 > Versions move fast; these decoders are kept working across newer Wazuh, RouterOS and UniFi releases, so the exact versions above are a snapshot, not a hard requirement.
 
@@ -427,9 +557,12 @@ echo '[jdoe (ID: 5)] [DELETE] [API Client - Client Secret] [2026-06-29T10:02:00.
 
 - [ ] JAMF Protect & Security Cloud integration
 - [ ] Fortinet VPN tunnel state monitoring (up/down)
-- [ ] UniFi threat/IDS event decoding
+- [x] UniFi threat/IDS event decoding (rules 100358-100359, 100383-100384)
 - [x] UniFi AP direct logs — readable per-AP syslog (daemon+message), Wi-Fi client assoc/disassoc, fan/thermal telemetry (`unifi_ap.xml`, rules 100368-100372); needs symantec `decoder_exclude` (learning #15)
 - [x] UniFi switch direct logs — readable per-switch syslog (`unifi_switch.xml`, rule 100380; exclude BNC decoders if present)
+- [x] UniFi debug-mode full coverage — UDM system syslog (doubled hostname), AP kernel events, USW-Flex/UPS Tower (no timestamp); measured 100% decode rate over a 48h/10.7M-event survey
+- [ ] More UniFi hardware coverage — we are limited by the devices we own; log samples from other UniFi models (UXG, UCG, Protect NVRs, other switch/AP families) are very welcome
+- [ ] Propose the UniFi decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing

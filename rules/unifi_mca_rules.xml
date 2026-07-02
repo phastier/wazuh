@@ -1,0 +1,76 @@
+<!--
+  Rules for the unifi-usw-flex / unifi-ups decoders (UniFi devices logging
+  without a syslog timestamp). See decoders/unifi_mca.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100770-100799
+-->
+<group name="unifi,mca,">
+
+  <!-- Bases at level 3 (above stock rule 1002 level 2 which steals lines
+       containing "failed"); heartbeats reclassified to level 1 by children -->
+  <rule id="100770" level="3">
+    <decoded_as>unifi-usw-flex</decoded_as>
+    <description>USW-Flex: $(device.name) event</description>
+    <group>unifi,usw_flex,</group>
+  </rule>
+
+  <rule id="100771" level="3">
+    <decoded_as>unifi-ups</decoded_as>
+    <description>UniFi UPS: $(device.name) event</description>
+    <group>unifi,ups,</group>
+  </rule>
+
+  <!-- USW-Flex port link transitions -->
+  <rule id="100772" level="4">
+    <if_sid>100770</if_sid>
+    <status>^down$</status>
+    <description>USW-Flex $(device.name): port $(port) link DOWN</description>
+    <group>unifi,usw_flex,link,</group>
+  </rule>
+
+  <rule id="100773" level="3">
+    <if_sid>100770</if_sid>
+    <status>^up$</status>
+    <description>USW-Flex $(device.name): port $(port) link UP</description>
+    <group>unifi,usw_flex,link,</group>
+  </rule>
+
+  <!-- UPS: controller inform failing over HTTP (503 Server Busy seen in debug) -->
+  <rule id="100774" level="4">
+    <if_sid>100771</if_sid>
+    <match>MCA: HTTP Status = 4|MCA: HTTP Status = 5</match>
+    <description>UPS $(device.name): controller inform failed with HTTP $(status)</description>
+    <group>unifi,ups,inform_failure,</group>
+  </rule>
+
+  <rule id="100775" level="7" frequency="10" timeframe="600">
+    <if_matched_sid>100774</if_matched_sid>
+    <same_field>device.name</same_field>
+    <description>UPS $(device.name): persistent inform failures (10+ in 10 min) — controller unreachable or overloaded</description>
+    <group>unifi,ups,inform_failure,</group>
+  </rule>
+
+  <!-- UPS: inform retry counter (informational, escalates through 100775) -->
+  <rule id="100776" level="2">
+    <if_sid>100771</if_sid>
+    <field name="mca.rc" type="pcre2">.+</field>
+    <description>UPS $(device.name): inform error (reason $(mca.reason), rc $(mca.rc))</description>
+    <group>unifi,ups,inform_failure,</group>
+  </rule>
+
+  <!-- MCA heartbeats / dev_status: noise, traced without alerting -->
+  <rule id="100777" level="1">
+    <if_sid>100770</if_sid>
+    <match>MCA: Send normal inform</match>
+    <description>USW-Flex $(device.name): periodic inform to $(url)</description>
+    <group>unifi,usw_flex,inform,</group>
+  </rule>
+
+  <rule id="100778" level="1">
+    <if_sid>100771</if_sid>
+    <match>MCA: Send normal inform|MCA: Inform starting|dev_status: </match>
+    <description>UPS $(device.name): MCA/dev_status heartbeat</description>
+    <group>unifi,ups,inform,</group>
+  </rule>
+
+</group>

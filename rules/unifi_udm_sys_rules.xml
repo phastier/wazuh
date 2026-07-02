@@ -1,0 +1,79 @@
+<!--
+  Rules for the unifi-udm-sys decoder (UDM system syslog in debug mode,
+  doubled hostname). See decoders/unifi_udm_syslog.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100700-100719
+-->
+<group name="unifi,udm_sys,">
+
+  <!-- Base at level 3: root rules are evaluated by descending level, so a
+       level-1 base would lose events containing "failed"/"error" to the stock
+       rule 1002 (level 2). Noise is reclassified to level 1 by child rules. -->
+  <rule id="100700" level="3">
+    <decoded_as>unifi-udm-sys</decoded_as>
+    <description>UDM system: $(program) event</description>
+    <group>unifi,udm_sys,</group>
+  </rule>
+
+  <!-- IPS list update failure: signatures may be getting stale -->
+  <rule id="100701" level="5">
+    <if_sid>100700</if_sid>
+    <status>File checksum failed</status>
+    <description>UDM IPS: update of list $(ips.file) failed (bad checksum)</description>
+    <group>unifi,udm_sys,ips,update_failure,</group>
+  </rule>
+
+  <rule id="100702" level="10" frequency="4" timeframe="21600">
+    <if_matched_sid>100701</if_matched_sid>
+    <same_field>ips.file</same_field>
+    <description>UDM IPS: repeated update failures for $(ips.file) (4+ in 6h) — the list is no longer updating</description>
+    <group>unifi,udm_sys,ips,update_failure,</group>
+  </rule>
+
+  <!-- Privilege escalation: every sudo command is traced -->
+  <rule id="100703" level="3">
+    <if_sid>100700</if_sid>
+    <field name="command" type="pcre2">.+</field>
+    <description>UDM sudo: $(srcuser) as $(dstuser): $(command)</description>
+    <group>unifi,udm_sys,sudo,privilege_escalation,</group>
+  </rule>
+
+  <!-- Memory pressure: earlyoom is telemetry (level 1), alert below 10% -->
+  <rule id="100704" level="1">
+    <if_sid>100700</if_sid>
+    <field name="mem.avail_pct" type="pcre2">.+</field>
+    <description>UDM earlyoom: available memory $(mem.avail_pct)% ($(mem.avail_mib)/$(mem.total_mib) MiB)</description>
+    <group>unifi,udm_sys,memory,</group>
+  </rule>
+
+  <rule id="100705" level="8">
+    <if_sid>100704</if_sid>
+    <field name="mem.avail_pct" type="pcre2">^\d\.</field>
+    <description>UDM earlyoom: available memory below 10% ($(mem.avail_pct)%) — controller at risk of OOM kills</description>
+    <group>unifi,udm_sys,memory,low_resources,</group>
+  </rule>
+
+  <!-- systemd: unit failure -->
+  <rule id="100706" level="5">
+    <if_sid>100700</if_sid>
+    <status>^Failed</status>
+    <description>UDM systemd: unit $(systemd.unit) failed</description>
+    <group>unifi,udm_sys,systemd,service_failure,</group>
+  </rule>
+
+  <!-- systemd: normal unit lifecycle = noise, traced without alerting -->
+  <rule id="100707" level="1">
+    <if_sid>100700</if_sid>
+    <field name="systemd.verb" type="pcre2">.+</field>
+    <description>UDM systemd: $(systemd.verb) $(systemd.unit_desc)</description>
+    <group>unifi,udm_sys,systemd,</group>
+  </rule>
+
+  <rule id="100708" level="1">
+    <if_sid>100700</if_sid>
+    <status>Succeeded</status>
+    <description>UDM systemd: unit $(systemd.unit) completed normally</description>
+    <group>unifi,udm_sys,systemd,</group>
+  </rule>
+
+</group>
