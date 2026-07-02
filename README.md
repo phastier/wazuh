@@ -292,6 +292,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
 | 100430 | FortiGate | Correlation (repeated VPN denies) |
+| 100440-100445 | FortiGate | IPsec tunnel state (tunnel down L8, up L3, phase-2 L5/L3, flapping L10, stats/negotiation traced L1) |
 | 100500-100507 | Jamf Pro | Authentication (login, logout, token, failed login, password change, brute force) |
 | 100510-100516 | Jamf Pro | Change management (READ surfaced at low level + object name, sensitive objects + FileVault PRK escalated, create/update/delete) |
 | 100520-100525 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM commands incl. destructive erase/wipe, security settings, audit log retention) |
@@ -556,7 +557,7 @@ echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' si
 ## Roadmap
 
 - [ ] JAMF Protect & Security Cloud integration
-- [ ] Fortinet VPN tunnel state monitoring (up/down)
+- [x] Fortinet VPN tunnel state monitoring — tunnel/phase-2 up/down with per-tunnel flapping correlation (rules 100440-100445)
 - [x] UniFi threat/IDS event decoding (rules 100358-100359, 100383-100384)
 - [x] UniFi AP direct logs — readable per-AP syslog (daemon+message), Wi-Fi client assoc/disassoc, fan/thermal telemetry (`unifi_ap.xml`, rules 100368-100372); needs symantec `decoder_exclude` (learning #15)
 - [x] UniFi switch direct logs — readable per-switch syslog (`unifi_switch.xml`, rule 100380; exclude BNC decoders if present)

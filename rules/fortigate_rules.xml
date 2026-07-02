@@ -85,4 +85,62 @@
     <group>fortigate,vpn,alert,</group>
   </rule>
 
+  <!-- ============================== -->
+  <!-- VPN TUNNEL STATE (up/down)     -->
+  <!-- ============================== -->
+  <!-- The stock decoder extracts everything (action, vpntunnel, remip...) but
+       the stock rule 81636 classifies ALL VPN events at level 1 "VPN related
+       information" — including tunnel-down. These children restore visibility.
+       action= is matched on the raw log: reliable regardless of whether the
+       decoder stored it as a static or dynamic field. -->
+
+  <!-- IPsec tunnel down: a site-to-site link just dropped -->
+  <rule id="100440" level="8">
+    <if_sid>81636</if_sid>
+    <match>action="tunnel-down"</match>
+    <description>Fortigate: IPsec tunnel $(vpntunnel) DOWN (peer $(remip))</description>
+    <group>fortigate,vpn,tunnel_state,</group>
+  </rule>
+
+  <!-- IPsec tunnel up: link restored -->
+  <rule id="100441" level="3">
+    <if_sid>81636</if_sid>
+    <match>action="tunnel-up"</match>
+    <description>Fortigate: IPsec tunnel $(vpntunnel) UP (peer $(remip))</description>
+    <group>fortigate,vpn,tunnel_state,</group>
+  </rule>
+
+  <!-- Phase 2 (SA) state changes: rekeys bounce phase 2 without dropping the
+       tunnel, so keep these lower than tunnel-down -->
+  <rule id="100442" level="5">
+    <if_sid>81636</if_sid>
+    <match>action="phase2-down"</match>
+    <description>Fortigate: IPsec phase 2 DOWN on tunnel $(vpntunnel)</description>
+    <group>fortigate,vpn,tunnel_state,</group>
+  </rule>
+
+  <rule id="100443" level="3">
+    <if_sid>81636</if_sid>
+    <match>action="phase2-up"</match>
+    <description>Fortigate: IPsec phase 2 UP on tunnel $(vpntunnel)</description>
+    <group>fortigate,vpn,tunnel_state,</group>
+  </rule>
+
+  <!-- Tunnel flapping: repeated drops of the same tunnel -->
+  <rule id="100444" level="10" frequency="4" timeframe="600">
+    <if_matched_sid>100440</if_matched_sid>
+    <same_field>vpntunnel</same_field>
+    <description>Fortigate: IPsec tunnel $(vpntunnel) flapping (4+ drops in 10 min)</description>
+    <group>fortigate,vpn,tunnel_state,flapping,</group>
+  </rule>
+
+  <!-- Periodic tunnel statistics and negotiation progress: noise, traced
+       without alerting (one stats line per tunnel every 10 minutes) -->
+  <rule id="100445" level="1">
+    <if_sid>81636</if_sid>
+    <match>action="tunnel-stats"|action="negotiate"|action="install_sa"</match>
+    <description>Fortigate: IPsec housekeeping ($(logdesc)) on tunnel $(vpntunnel)</description>
+    <group>fortigate,vpn,</group>
+  </rule>
+
 </group>
