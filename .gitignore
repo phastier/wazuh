@@ -1,8 +1,7 @@
-*.bak
-*.bak2
-*.disabled
-*.log
+# Python bytecode from local tooling (log-anonymize.py / sns-anonymize.py)
+__pycache__/
+*.pyc
 
-# macOS
-.DS_Store
-**/.DS_Store
+# Never commit real or anonymised production corpora — keep them out of the repo
+*corpus*.txt
+leak_markers.txt
