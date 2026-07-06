@@ -1,0 +1,23 @@
+# leak_markers — site-specific strings the anonymiser must SCRUB from free text
+# and REFUSE to emit if any survive. Copy to leak_markers.txt and fill with YOUR
+# own values. This file is a template with placeholders; keep the real one PRIVATE
+# (do not commit it). Matching is case-insensitive, substring, token-bounded.
+#
+# One marker per line. Lines starting with '#' are ignored.
+
+# --- your organisation / domains (as they appear in cert DNs, object names, etc.)
+ACME
+acme.example
+acme.local
+
+# --- appliance serial(s) seen in your logs (fw="SN...")
+SN000EXAMPLE0000
+
+# --- internal subnets that must never appear in the output
+# (the anonymiser already maps private IPs to 10.x, these are a backstop)
+10.20.30.
+172.16.42.
+192.168.99.
+
+# --- any other object / identity names specific to your environment
+# e.g. VPN gateway CNs, admin usernames, site codes, etc.

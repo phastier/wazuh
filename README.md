@@ -1,6 +1,8 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max / UDM SE, APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max / UDM SE, APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+
+It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
 The design philosophy is **decode everything, then triage by level**: every event type a device can emit gets decoded and traced (level 1 = archived without alerting), and only meaningful events alert (level 3+). Nothing is silently dropped — noise reduction happens at the source or at the rule level, never by leaving events undecoded.
 
@@ -60,6 +62,20 @@ Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work we
 - **VPN IPsec monitoring**: Alerts on denied traffic through site-to-site tunnels (routing issues, unauthorized access attempts). Filters on `action="deny"` to avoid false positives from legitimate ZTNA traffic
 - **System events**: Performance stats, AV database updates, disk log rotation
 - **Correlation**: Repeated VPN denies trigger higher-level alerts for investigation
+
+### Stormshield SNS (SN-series NG firewall)
+Custom decoders and rules for **Stormshield Network Security** appliances — no community Wazuh decoders exist for the SNS `key="value"` syslog format. Every event begins with `id=firewall ... logtype="<type>"`; one parent decoder on the `id=firewall ` signature dispatches to a child per logtype, with a catch-all so unknown logtypes still decode (`stormshield_sns.xml`).
+
+- **Traffic** (`filter` / `connection`): allowed/denied decisions with the 5-tuple (src/dst IP, ports, protocol), source user (SSL-VPN), interfaces. Allowed traffic is telemetry (level 1); blocks alert (level 3)
+- **SSL/TLS inspection** (`ssl`): decipher verdict + message (e.g. *"Connection not deciphered"*, *"OpenVPN connection detected"*) — blocked SSL raised to level 4
+- **IPS / protections** (`alarm`): alarm id, class, target and risk — level 6, **high-risk (risk ≥ 7) escalated to level 10**
+- **Authentication** (`auth`): events such as *"deprecated hash method"* (weak password hashing) — level 5
+- **SSL VPN** (`xvpn`): nominative remote-access sessions (tunnel created, user authenticated) — level 4
+- **IPsec VPN** (`vpn`): IKE tunnel events (SA established/deleted), negotiation failures escalated to level 8
+- **Firewall admin audit** (`server`): who administers the appliance (webadmin login + serverd CLI/config commands) — level 5, **configuration changes raised to level 8**
+- **DHCP** (`system`, `service=dhcp`): **`DHCPACK` = who is connected** — IP/MAC/hostname extracted into `dhcp.*` fields for an asset inventory (level 3); other DHCP verbs stay telemetry
+- **Periodic statistics** (`ipsecstat` / `filterstat` / `authstat`): IKE SA count, accepted/blocked totals, auth counters — traced at level 1
+- **Field mapping**: 5-tuple to Wazuh static fields; the firewall verdict is a *dynamic* field `fw.action` (the static `action` field is rejected in rule matching on some builds — learning #23)
 
 ### Linux / Proxmox hosts (journald)
 Decoders and rules for common programs collected by Wazuh agents through journald and left undecoded by the stock ruleset (`journald_extra.xml`):
@@ -148,6 +164,10 @@ These are hard-won lessons from building these integrations:
 
 22. **Some UniFi devices log with NO syslog timestamp** — USW-Flex 2.5G switches and UPS Tower units send `HOSTNAME <mac>,<model>-<fw>: SUBSYS: msg` with no timestamp at all; the pre-decoder extracts nothing and prematches must match from the raw line start (`^\S+ [0-9a-fA-F]{12},...`).
 
+23. **Stormshield SNS `key="value"`: dispatch on the trailing `logtype=`, keep the verdict dynamic** — every SNS event ends with `logtype="filter|ssl|alarm|vpn|server|..."`. One parent on `^id=firewall ` + one child per logtype (each discriminating on its own `logtype=`) + a catch-all last decodes every type cleanly. Decode the firewall verdict into a **dynamic** field (`fw.action`), not the static `action` — matching a static field with `<field name="action">` fails on some builds (learnings #5/#19). Space-bearing values (`msg="..."`) need a quoted capture, and ` src=`/` dst=` must be **space-anchored** so they don't match `modsrc=`/`origdst=`.
+
+24. **Wazuh `<field>` matching is substring, not exact — anchor it** — `<field name="logtype">auth</field>` also matches `authstat` (and `vpn` matches `xvpn`), so the wrong rule fires and the specific one never runs. Anchor every discriminating field match: `<field name="logtype" type="pcre2">^auth$</field>`. Same trap as prematches (learning #7), one layer up in the rules.
+
 
 ## Installation
 
@@ -162,6 +182,8 @@ cp decoders/unifi_udm_syslog.xml /var/ossec/etc/decoders/      # UDM system sysl
 cp decoders/unifi_mca.xml /var/ossec/etc/decoders/             # USW-Flex 2.5G + UPS Tower (no syslog timestamp) - see learning #22
 cp decoders/journald_extra.xml /var/ossec/etc/decoders/        # zed, pvescheduler, CRON, qemu-ga, LibreNMS...
 cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner probes on public endpoints
+# Only if you have a Stormshield SNS firewall:
+cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
 cp decoders/unifi.xml /var/ossec/etc/decoders/
 ```
@@ -177,6 +199,7 @@ cp rules/unifi_udm_sys_rules.xml /var/ossec/etc/rules/         # UDM system: sud
 cp rules/unifi_mca_rules.xml /var/ossec/etc/rules/             # USW-Flex + UPS Tower (100770-100778)
 cp rules/journald_extra_rules.xml /var/ossec/etc/rules/        # zed, pvescheduler, CRON... (100840-100858)
 cp rules/web_malformed_rules.xml /var/ossec/etc/rules/         # scanner detection (100820-100821)
+cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS (100900-100919)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -236,6 +259,18 @@ config log syslogd setting
     set source-ip "<FORTIGATE_IP>"
 end
 ```
+
+### Stormshield SNS
+On the appliance, add a syslog profile under **Configuration → Notifications → Logs - Syslog - IPFIX → Syslog**: destination = your Wazuh server, **UDP port 514**, and enable the log families you want (filter, connection, alarm, system, ssl, vpn, xvpn, server, authentication…). Then declare a syslog listener on the Wazuh manager in `/var/ossec/etc/ossec.conf` and restart:
+```xml
+<remote>
+  <connection>syslog</connection>
+  <port>514</port>
+  <protocol>udp</protocol>
+  <allowed-ips>10.0.0.1/32</allowed-ips>   <!-- the SN's real source IP -->
+</remote>
+```
+> **Firewall self-traffic through IPsec**: if the SN reaches Wazuh over a *policy-based* IPsec tunnel, its **self-originated** syslog must be sourced from an IP inside the tunnel's local network, or it never enters the tunnel. Confirm the received source with `sudo tcpdump -ni any udp port 514` on the Wazuh host, then pin `<allowed-ips>` to that exact `/32` — otherwise `wazuh-remoted` silently drops packets whose source isn't whitelisted.
 
 ### Jamf Pro (on-prem)
 Jamf Pro writes log4j files under `/usr/local/jss/logs/` — it does **not** send syslog. Install the Wazuh agent on the Jamf Pro host and add to `/var/ossec/etc/ossec.conf`:
@@ -303,6 +338,9 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100800-100806 | MikroTik | DHCP bindings (assigned/deassigned/offering), debug option dump, iface links + flapping L8 |
 | 100820-100821 | Web | Malformed requests / scanner probes (single L5, repeated L8) |
 | 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (error L8), CRON, qemu-ga, LibreNMS, chronyd |
+| 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
+| 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
+| 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
 
 ## Decoded fields
 
@@ -454,6 +492,19 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 ### FortiGate (built-in decoder fields)
 Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`, `srcport`, `dstport`, `action`, `policyid`, `service`, `srcintf`, `dstintf`, `devname`, `logid`, `level`, and more. Our custom rules add context through enhanced descriptions that surface VPN tunnel names and traffic patterns.
 
+### Stormshield SNS
+| Field | Content | Example |
+|-------|---------|---------|
+| `srcip` / `dstip` / `srcport` / `dstport` / `protocol` | Connection 5-tuple | `10.0.0.24` / `203.0.113.67` / `56594` / `443` / `https` |
+| `fw.action` | Firewall verdict (dynamic field) | `pass` / `block` |
+| `srcuser` | Authenticated user (SSL-VPN / admin) | `jdoe` |
+| `logtype` | SNS log family | `filter` / `alarm` / `vpn` / `server` |
+| `sns.msg` | Event message | `OpenVPN connection detected` |
+| `alarm.id` / `alarm.class` / `alarm.risk` | IPS alarm | `118` / `protocol` / `10` |
+| `dhcp.event` / `dhcp.ip` / `dhcp.mac` / `dhcp.hostname` | DHCP lease (asset inventory) | `DHCPACK` / `10.0.0.69` / `00:11:22:33:44:bb` / `Laptop-01` |
+| `http.method` / `http.status` | Protocol plugin (HTTP) | `GET` / `200` |
+| `srcintf` / `dstintf` | Interfaces | `lan` / `wan` |
+
 ## UniFi CEF Event IDs
 
 These are the UniFi Network, Protect, and OS CEF event IDs we have identified and mapped:
@@ -540,6 +591,15 @@ echo '203.0.113.66 - - [01/Jul/2026:14:33:39 +0200] "" 400 0 "-" "-"' | /var/oss
 
 # ZFS zed error (level 9)
 echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' size=8192 offset=839904612352 priority=0 err=6 flags=0x200080 bookmark=259:128:0:11611' | /var/ossec/bin/wazuh-logtest
+
+# Stormshield SNS: blocked traffic (level 3)
+echo 'id=firewall time="2026-07-06 13:44:52" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:44:52" pri=5 confid=01 slotlevel=2 ruleid=29 rulename="rule_2" srcif="Ethernet1" srcifname="lan" ipproto=udp dstif="Ethernet0" dstifname="wan" proto=dns_udp src=10.0.0.61 srcport=40638 srcportname=ephemeral_fw_udp srcmac=00:11:22:33:44:66 dst=198.51.100.1 dstport=53 dstportname=dns_udp dstname=resolver.example ipv=4 sent=0 rcvd=0 duration=0.00 action=block logtype="filter"' | /var/ossec/bin/wazuh-logtest
+
+# Stormshield SNS: high-risk IPS alarm (level 10)
+echo 'id=firewall time="2026-07-06 13:45:10" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:09" pri=1 confid=01 slotlevel=2 ruleid=93 rulename="rule_1d" srcif="Ethernet1" srcifname="lan" ipproto=tcp proto=ssl src=10.0.0.20 srcport=64127 dst=203.0.113.61 dstport=443 ipv=4 action=block msg="Invalid SSL packet (Unknown SSL protocol)" class=protocol classification=0 alarmid=118 target=dst risk=10 logtype="alarm"' | /var/ossec/bin/wazuh-logtest
+
+# Stormshield SNS: DHCPACK — who is connected (level 3, IP/MAC/hostname extracted)
+echo 'id=firewall time="2026-07-06 13:45:51" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:51" pri=6 service=dhcp msg="DHCPACK on 10.0.0.69 to 00:11:22:33:44:bb (Laptop-01) via igc6" logtype="system"' | /var/ossec/bin/wazuh-logtest
 ```
 
 ## Tested environment
@@ -554,6 +614,26 @@ echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' si
 
 > Versions move fast; these decoders are kept working across newer Wazuh, RouterOS and UniFi releases, so the exact versions above are a snapshot, not a hard requirement.
 
+## Log anonymiser
+
+`tools/sns-anonymize.py` builds shareable Stormshield sample corpora from production logs **without leaking personal data**. Firewall logs contain named users, client IPs and MACs, hostnames, certificate DNs and browsing destinations — so the tool anonymises **in situ** (on the box where the logs live, read-only) and lets only pseudonymised output leave the environment. This is how the Stormshield samples in this repo were derived.
+
+- **Consistent, non-reversible pseudonyms** — same real value → same placeholder within a run (structure and correlations preserved), but the mapping is order-based and never written to disk.
+- IPs → `10.x` (private) / TEST-NET (public), plus MACs, users → `user0001`, hostnames, rulenames, domains, interface zones and appliance serial → placeholders.
+- **Hard-redacts** the high-risk free text: `arg="..."`, certificate DNs anywhere (incl. `remoteid=`), and destination intelligence (geo / IP reputation / URL category) on **both** `src*` and `dst*` sides.
+- **Diversity sampling** keeps a few examples per `(logtype, action, field-shape)`, so the corpus stays compact and representative.
+- **Refuses to emit** (exit 2) if any site marker survives — a belt-and-braces leak scan. Site-specific markers (org names, serials, internal subnets) live in an external `--deny-file`, never in the script, so the tool itself is safe to publish (see `tools/leak_markers.example.txt`).
+
+```bash
+# build an anonymised corpus from the manager's archive (read-only)
+sudo tail -n 500000 /var/ossec/logs/archives/archives.json \
+  | tools/sns-anonymize.py --deny-file leak_markers.txt > corpus_anon.txt
+# re-scan an existing corpus without anonymising
+tools/sns-anonymize.py --self-check --deny-file leak_markers.txt < corpus_anon.txt
+```
+
+> The anonymiser targets the Stormshield SNS key set today. Generalising it to the other platforms in this repo (UniFi, MikroTik, FortiGate, Jamf) is on the roadmap.
+
 ## Roadmap
 
 - [ ] JAMF Protect & Security Cloud integration
@@ -563,7 +643,10 @@ echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' si
 - [x] UniFi switch direct logs — readable per-switch syslog (`unifi_switch.xml`, rule 100380; exclude BNC decoders if present)
 - [x] UniFi debug-mode full coverage — UDM system syslog (doubled hostname), AP kernel events, USW-Flex/UPS Tower (no timestamp); measured 100% decode rate over a 48h/10.7M-event survey
 - [ ] More UniFi hardware coverage — we are limited by the devices we own; log samples from other UniFi models (UXG, UCG, Protect NVRs, other switch/AP families) are very welcome
-- [ ] Propose the UniFi decoders upstream (Wazuh ruleset repository)
+- [x] Stormshield SNS decoding — all logtypes (traffic, SSL, IPS alarms, auth, SSL-VPN, IPsec VPN, admin audit, DHCP asset inventory, periodic stats), rules 100900-100919
+- [x] In-situ log anonymiser for building shareable sample corpora without leaking personal data (`tools/sns-anonymize.py`)
+- [ ] Generalise the log anonymiser to the other platforms (UniFi / MikroTik / FortiGate / Jamf field sets)
+- [ ] Propose the UniFi and Stormshield decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing

@@ -1,0 +1,166 @@
+<!--
+  Rules for the stormshield-sns decoder (Stormshield SNS NG firewall syslog).
+  See decoders/stormshield_sns.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100900-100919
+  Philosophy: decode & archive EVERYTHING; alert sensibly. Allowed traffic and
+  telemetry are kept sub-threshold (level 1: archived, no alert); denied
+  traffic, IPS alarms, authentication and VPN activity are raised. Levels are a
+  starting point — which traffic to keep vs. drop is a policy decision.
+  NB: logtype matches are anchored (^x$) — Wazuh field matching is substring by
+  default, so "auth" would otherwise match "authstat", "vpn" match "xvpn", etc.
+-->
+<group name="stormshield,firewall,">
+
+  <!-- Base at level 3 (pre-empts stock rule 1002); specialised below. -->
+  <rule id="100900" level="3">
+    <decoded_as>stormshield-sns</decoded_as>
+    <description>Stormshield SNS: $(logtype) event</description>
+    <group>stormshield,firewall,</group>
+  </rule>
+
+  <!-- Allowed traffic: telemetry (archived, sub-alert) -->
+  <rule id="100901" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
+    <field name="fw.action">pass</field>
+    <description>Stormshield: allowed $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>stormshield,firewall,allowed,</group>
+  </rule>
+
+  <!-- Denied traffic: notable -->
+  <rule id="100902" level="3">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
+    <field name="fw.action">block</field>
+    <description>Stormshield: blocked $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>stormshield,firewall,denied,</group>
+  </rule>
+
+  <!-- SSL/TLS inspection -->
+  <rule id="100903" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^ssl$</field>
+    <description>Stormshield SSL: $(fw.action) $(srcip) -> $(dstip): $(sns.msg)</description>
+    <group>stormshield,firewall,ssl,</group>
+  </rule>
+  <rule id="100904" level="4">
+    <if_sid>100903</if_sid>
+    <field name="fw.action">block</field>
+    <description>Stormshield SSL blocked: $(sns.msg) ($(srcip) -> $(dstip))</description>
+    <group>stormshield,firewall,ssl,denied,</group>
+  </rule>
+
+  <!-- IPS / protection alarms -->
+  <rule id="100905" level="6">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^alarm$</field>
+    <description>Stormshield IPS alarm: $(sns.msg) (id $(alarm.id), class $(alarm.class))</description>
+    <group>stormshield,firewall,ids,</group>
+  </rule>
+  <rule id="100906" level="10">
+    <if_sid>100905</if_sid>
+    <field name="alarm.risk" type="pcre2">^(?:[7-9]|10)$</field>
+    <description>Stormshield IPS high-risk alarm (risk $(alarm.risk)): $(sns.msg)</description>
+    <group>stormshield,firewall,ids,</group>
+  </rule>
+
+  <!-- Authentication events (e.g. weak password hash in use) -->
+  <rule id="100907" level="5">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^auth$</field>
+    <description>Stormshield auth: $(sns.msg) (user $(srcuser))</description>
+    <group>stormshield,firewall,authentication,</group>
+  </rule>
+
+  <!-- SSL VPN activity (nominative remote access) -->
+  <rule id="100908" level="4">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^xvpn$</field>
+    <description>Stormshield SSL VPN: $(sns.msg) (user $(srcuser) from $(srcip))</description>
+    <group>stormshield,firewall,vpn,authentication,</group>
+  </rule>
+
+  <!-- System events (dhcp, ...) -->
+  <rule id="100909" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^system$</field>
+    <description>Stormshield system: $(sns.msg)</description>
+    <group>stormshield,firewall,system,</group>
+  </rule>
+
+  <!-- DHCP events decode into dhcp.* (not sns.msg), so give them their own
+       description instead of falling on the generic system rule. L1 telemetry. -->
+  <rule id="100911" level="1">
+    <if_sid>100909</if_sid>
+    <field name="dhcp.event" type="pcre2">.+</field>
+    <description>Stormshield DHCP $(dhcp.event): $(dhcp.ip) $(dhcp.mac) $(dhcp.hostname)</description>
+    <group>stormshield,firewall,dhcp,</group>
+  </rule>
+
+  <!-- DHCP lease granted (DHCPACK): raised so "who is connected" is visible
+       (per policy). Other DHCP verbs stay at 100911 L1. -->
+  <rule id="100912" level="3">
+    <if_sid>100911</if_sid>
+    <field name="dhcp.event" type="pcre2">^DHCPACK$</field>
+    <description>Stormshield DHCP: $(dhcp.ip) leased to $(dhcp.mac) ($(dhcp.hostname))</description>
+    <group>stormshield,firewall,dhcp,asset_inventory,</group>
+  </rule>
+
+  <!-- Protocol plugin (HTTP ...) -->
+  <rule id="100910" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^plugin$</field>
+    <description>Stormshield plugin: $(protocol) $(http.method) $(http.status) $(srcip) -> $(dstip)</description>
+    <group>stormshield,firewall,</group>
+  </rule>
+
+  <!-- server: firewall admin / serverd audit trail (who administers the FW) -->
+  <rule id="100913" level="5">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^server$</field>
+    <description>Stormshield admin: $(srcuser)@$(srcip): $(sns.msg)</description>
+    <group>stormshield,firewall,authentication,administration,</group>
+  </rule>
+  <rule id="100914" level="8">
+    <if_sid>100913</if_sid>
+    <field name="sns.msg" type="pcre2">(?i)\b(SET|ADD|DELETE|MODIF|CREATE|REMOVE|ACTIVATE|WRITE|IMPORT|UPLOAD|INSERT|UPDATE|RENAME|DELUSER|ADDUSER)\b</field>
+    <description>Stormshield admin config change by $(srcuser)@$(srcip): $(sns.msg)</description>
+    <group>stormshield,firewall,administration,config_changed,</group>
+  </rule>
+
+  <!-- vpn: IPsec (IKE) tunnel events -->
+  <rule id="100915" level="4">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^vpn$</field>
+    <description>Stormshield IPsec VPN: $(sns.msg) ($(srcip) -> $(dstip))</description>
+    <group>stormshield,firewall,vpn,</group>
+  </rule>
+  <rule id="100916" level="8">
+    <if_sid>100915</if_sid>
+    <field name="sns.msg" type="pcre2">(?i)(fail|error|refus|invalid|no proposal|timeout|unreach|denied|reject|cannot|unable)</field>
+    <description>Stormshield IPsec VPN issue: $(sns.msg) ($(srcip) -> $(dstip))</description>
+    <group>stormshield,firewall,vpn,</group>
+  </rule>
+
+  <!-- periodic statistics (telemetry, archived, sub-alert) -->
+  <rule id="100917" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^ipsecstat$</field>
+    <description>Stormshield IPsec stats: $(ipsec.established_sa) IKE SA established</description>
+    <group>stormshield,firewall,vpn,</group>
+  </rule>
+  <rule id="100918" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^filterstat$</field>
+    <description>Stormshield filter stats: accepted $(fw.accepted) / blocked $(fw.blocked)</description>
+    <group>stormshield,firewall,</group>
+  </rule>
+  <rule id="100919" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^authstat$</field>
+    <description>Stormshield auth stats: $(auth.total) total ($(auth.sslvpn) sslvpn, $(auth.webadmin) webadmin)</description>
+    <group>stormshield,firewall,authentication,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,134 @@
+<!--
+  Stormshield SNS (SN-series NG firewall) syslog decoder — key="value" format.
+  Every event begins with `id=firewall ... logtype="<type>"`. One parent on the
+  `id=firewall ` signature, one child per logtype (filter, connection, ssl,
+  alarm, plugin, auth, xvpn, system), discriminated by the trailing logtype=,
+  plus a catch-all last so an unknown logtype is still decoded (base rule).
+
+  Notes:
+   - The network 5-tuple maps to Wazuh static fields (srcip/dstip/srcport/
+     dstport/protocol/srcuser); the firewall verdict is a dynamic field
+     `fw.action` (avoids the "action is static" pitfall in rule matching).
+   - Space-bearing values (msg="...") use a quoted capture ([^"]*).
+   - Leading-space anchors on ` src=`/` dst=` avoid matching modsrc=/origdst=.
+   - A child whose prematch matches but whose regex fails leaves the event
+     decoded by the parent only (graceful: base rule still fires).
+  Astier Consulting - Jul 2026
+-->
+
+<decoder name="stormshield-sns">
+  <prematch>^id=firewall </prematch>
+</decoder>
+
+<!-- filter / connection: traffic decisions (identical field layout) -->
+<decoder name="stormshield-sns-filter">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="(?:filter|connection)"</prematch>
+  <regex type="pcre2">^id=firewall .*?(?: user="([^"]*)" domain="[^"]*")? srcif="[^"]*" srcifname="([^"]*)" ipproto=\S+ dstif="[^"]*" dstifname="([^"]*)" proto=(\S+) src=(\S+) srcport=(\d+) .*? dst=(\S+) dstport=(\d+) .*?(?:action=(\w+) )?logtype="([^"]*)"</regex>
+  <order>srcuser, srcintf, dstintf, protocol, srcip, srcport, dstip, dstport, fw.action, logtype</order>
+</decoder>
+
+<!-- ssl: TLS inspection verdict (always carries msg="...") -->
+<decoder name="stormshield-sns-ssl">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="ssl"</prematch>
+  <regex type="pcre2">^id=firewall .*? proto=(\S+) .*? src=(\S+) srcport=(\d+) .*? dst=(\S+) dstport=(\d+) .*? action=(\w+) .*? msg="([^"]*)".*?logtype="([^"]*)"</regex>
+  <order>protocol, srcip, srcport, dstip, dstport, fw.action, sns.msg, logtype</order>
+</decoder>
+
+<!-- alarm: IPS / protection events (msg + class + alarmid always present) -->
+<decoder name="stormshield-sns-alarm">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="alarm"</prematch>
+  <regex type="pcre2">^id=firewall .*? msg="([^"]*)" class=(\w+)(?: classification=\d+)? alarmid=(\d+)(?: target=\w+)?(?: risk=(\d+))? logtype="([^"]*)"</regex>
+  <order>sns.msg, alarm.class, alarm.id, alarm.risk, logtype</order>
+</decoder>
+
+<!-- plugin: protocol plugin (HTTP op/result) -->
+<decoder name="stormshield-sns-plugin">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="plugin"</prematch>
+  <regex type="pcre2">^id=firewall .*?(?: user="([^"]*)" domain="[^"]*")? srcif="[^"]*" srcifname="([^"]*)" ipproto=\S+ dstif="[^"]*" dstifname="([^"]*)" proto=(\S+) src=(\S+) srcport=(\d+) .*? dst=(\S+) dstport=(\d+) .*? action=(\w+) op=(\w+) result=(\d+).*?logtype="([^"]*)"</regex>
+  <order>srcuser, srcintf, dstintf, protocol, srcip, srcport, dstip, dstport, fw.action, http.method, http.status, logtype</order>
+</decoder>
+
+<!-- auth: authentication events -->
+<decoder name="stormshield-sns-auth">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="auth"</prematch>
+  <regex type="pcre2">^id=firewall .*? user="([^"]*)" src=(\S+) domain="[^"]*" msg="([^"]*)" logtype="([^"]*)"</regex>
+  <order>srcuser, srcip, sns.msg, logtype</order>
+</decoder>
+
+<!-- xvpn: SSL VPN (tunnel setup / user auth) -->
+<decoder name="stormshield-sns-xvpn">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="xvpn"</prematch>
+  <regex type="pcre2">^id=firewall .*? user="([^"]*)" domain="[^"]*" src=(\S+) remotenet=(\S+) localnet=(\S+) .*? msg="([^"]*)" logtype="([^"]*)"</regex>
+  <order>srcuser, srcip, vpn.remotenet, vpn.localnet, sns.msg, logtype</order>
+</decoder>
+
+<!-- system/dhcp: lease events — who is on the network (IP/MAC/hostname).
+     Placed before the generic system child; tolerant to the DHCP verb
+     (ACK/OFFER carry "on IP to MAC (host)", REQUEST/DISCOVER/RELEASE differ). -->
+<decoder name="stormshield-sns-dhcp">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> service=dhcp msg="DHCP</prematch>
+  <regex type="pcre2">^id=firewall .*? service=dhcp msg="(DHCP\w+)(?: (?:on|for|of) (\d+\.\d+\.\d+\.\d+))?(?: (?:to|from) ([0-9A-Fa-f:]{17}))?(?: \(([^)]*)\))?.*?logtype="([^"]*)"</regex>
+  <order>dhcp.event, dhcp.ip, dhcp.mac, dhcp.hostname, logtype</order>
+</decoder>
+
+<!-- system: firewall system events (non-dhcp) -->
+<decoder name="stormshield-sns-system">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="system"</prematch>
+  <regex type="pcre2">^id=firewall .*? service=(\S+) msg="([^"]*)" logtype="([^"]*)"</regex>
+  <order>sns.service, sns.msg, logtype</order>
+</decoder>
+
+<!-- server: firewall admin / serverd audit (webadmin login + CLI/config commands) -->
+<decoder name="stormshield-sns-server">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="server"</prematch>
+  <regex type="pcre2">^id=firewall .*? user="([^"]*)" domain="[^"]*" address=(\S+) .*? msg="([^"]*)" logtype="([^"]*)"</regex>
+  <order>srcuser, srcip, sns.msg, logtype</order>
+</decoder>
+
+<!-- vpn: IPsec (IKE) tunnel events (SA established/deleted, negotiation) -->
+<decoder name="stormshield-sns-vpn">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="vpn"</prematch>
+  <regex type="pcre2">^id=firewall .*? src=(\S+) .*? dst=(\S+) .*? msg="([^"]*)" logtype="([^"]*)"</regex>
+  <order>srcip, dstip, sns.msg, logtype</order>
+</decoder>
+
+<!-- ipsecstat: IPsec statistics (periodic telemetry) -->
+<decoder name="stormshield-sns-ipsecstat">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="ipsecstat"</prematch>
+  <regex type="pcre2">^id=firewall .*? established_ikesa=(\d+) .*? logtype="([^"]*)"</regex>
+  <order>ipsec.established_sa, logtype</order>
+</decoder>
+
+<!-- filterstat: filter engine statistics (periodic telemetry) -->
+<decoder name="stormshield-sns-filterstat">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="filterstat"</prematch>
+  <regex type="pcre2">^id=firewall .*? Accepted=(\d+) Blocked=(\d+) .*? logtype="([^"]*)"</regex>
+  <order>fw.accepted, fw.blocked, logtype</order>
+</decoder>
+
+<!-- authstat: authentication statistics (periodic telemetry) -->
+<decoder name="stormshield-sns-authstat">
+  <parent>stormshield-sns</parent>
+  <prematch type="pcre2"> logtype="authstat"</prematch>
+  <regex type="pcre2">^id=firewall .*? auth=(\d+) .*? authwebadmin=(\d+) authsslvpn=(\d+) .*? logtype="([^"]*)"</regex>
+  <order>auth.total, auth.webadmin, auth.sslvpn, logtype</order>
+</decoder>
+
+<!-- catch-all: any other logtype still gets logtype extracted (base rule) -->
+<decoder name="stormshield-sns-other">
+  <parent>stormshield-sns</parent>
+  <regex type="pcre2">^id=firewall .*? logtype="([^"]*)"</regex>
+  <order>logtype</order>
+</decoder>
