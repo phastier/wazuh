@@ -1,6 +1,6 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (UDM Pro Max / UDM SE, APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
@@ -16,6 +16,7 @@ When we set out to integrate our network infrastructure into Wazuh, we found tha
 - There were **no working decoders** for MikroTik RouterOS 7.x with BSD syslog format
 - UniFi CEF events (WiFi client tracking, admin access) were **not decoded at all**
 - Fortinet built-in decoders work well, but **without tuning, mDNS/Bonjour noise drowns out real alerts** — especially in Apple-heavy environments
+- **Stormshield SNS** firewalls emit a rich `key="value"` syslog — traffic decisions, IPS alarms, IPsec/SSL VPN, admin audit, DHCP — that **no community Wazuh decoder** handles, so every event landed undecoded
 - Documentation on Wazuh PCRE2 limitations was scattered and incomplete
 
 This repository provides production-tested decoders and rules that actually work, along with noise suppression tuning for real-world mixed environments.
@@ -34,8 +35,8 @@ Custom decoders and rules — nothing usable existed for RouterOS 7.x BSD syslog
 - **Correlation rules**: Port scan detection, brute force alerts
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1133 (External Remote Services), T1110 (Brute Force)
 
-### Ubiquiti UniFi (UDM Pro Max)
-Custom decoders and rules — the existing BNC community rules are broken.
+### Ubiquiti UniFi (Network controller)
+Custom decoders and rules — the existing BNC community rules are broken. The CEF/syslog these parse is emitted by the **UniFi Network controller** itself, not by a specific box, so this applies to any UniFi OS console — **validated on UDM Pro Max and UDM SE**, and should hold on UDR, Cloud Key, UXG and self-hosted controllers running comparable Network/Protect versions.
 
 - **Firewall**: iptables rules with full field extraction (src/dst IP, MAC, ports, flags)
 - **WiFi tracking**: Client connected/disconnected/roamed with enriched fields (device alias, AP name, SSID, band, RSSI, duration)
@@ -105,14 +106,13 @@ Custom decoders and rules for Jamf Pro's application logs — no community Wazuh
 
 ## Architecture
 ```
-MikroTik CCR2004 ──────┐
-                        │
-UniFi UDM Pro Max ──────┼──► Syslog UDP/514 ──► Wazuh Server (rsyslog → analysisd)
-                        │
-Fortinet FortiGate ─────┘
+MikroTik router (RouterOS) ──┐
+UniFi Network controller ────┤
+Fortinet FortiGate ──────────┼──► Syslog UDP/514 ──► Wazuh Server (rsyslog → analysisd)
+Stormshield SNS ─────────────┘
 ```
 
-MikroTik and UniFi send BSD syslog format. FortiGate uses its native key=value syslog format. Wazuh's pre-decoder extracts timestamp and hostname before custom decoders process the message payload.
+MikroTik and UniFi send **BSD syslog**; FortiGate and Stormshield SNS send their native **`key=value` syslog**. Wazuh's pre-decoder extracts timestamp and hostname before the custom decoders process the message payload. **Jamf Pro and Linux/Proxmox hosts are collected by the Wazuh agent** (`<localfile>` / journald), not syslog.
 
 **Jamf Pro is collected differently**: it does not emit syslog, so its `JSSAccess.log` and `JAMFChangeManagement.log` (and `jamf-pro-installer.log`) are read directly on the Jamf Pro host by the Wazuh agent via `<localfile>` — there is no syslog pre-decoder, so the decoders match the raw file lines. See [Device configuration](#jamf-pro-on-prem).
 
@@ -239,8 +239,8 @@ systemctl restart wazuh-manager
 /system logging add action=wazuh topics=system
 ```
 
-### UniFi UDM (via Network UI)
-Navigate to **Settings → System → Activity Logging (Syslog)**:
+### UniFi Network controller (via Network UI)
+On the UniFi Network controller (UDM Pro Max/SE, UDR, Cloud Key, UXG, self-hosted…), navigate to **Settings → System → Activity Logging (Syslog)**:
 - Select **SIEM Server**
 - Server Address: `<WAZUH_IP>`
 - Port: `514`
@@ -632,7 +632,9 @@ sudo tail -n 500000 /var/ossec/logs/archives/archives.json \
 tools/sns-anonymize.py --self-check --deny-file leak_markers.txt < corpus_anon.txt
 ```
 
-> The anonymiser targets the Stormshield SNS key set today. Generalising it to the other platforms in this repo (UniFi, MikroTik, FortiGate, Jamf) is on the roadmap.
+Two tools ship in `tools/`:
+- **`sns-anonymize.py`** — Stormshield-tuned (knows the SNS field names); used to derive the Stormshield samples in this repo.
+- **`log-anonymize.py`** — **generic, works on any device/format**: universal IPv4 / IPv6 / MAC / e-mail scrubbing, certificate-DN redaction, `--redact-key NAME` to blank your format's user/host fields, optional `--scrub-fqdn`, and `--field` to pull a value out of JSON lines (e.g. `full_log`). This is the one to run before **[requesting a decoder](CONTRIBUTING.md)** for a device we don't cover yet.
 
 ## Roadmap
 
@@ -645,13 +647,14 @@ tools/sns-anonymize.py --self-check --deny-file leak_markers.txt < corpus_anon.t
 - [ ] More UniFi hardware coverage — we are limited by the devices we own; log samples from other UniFi models (UXG, UCG, Protect NVRs, other switch/AP families) are very welcome
 - [x] Stormshield SNS decoding — all logtypes (traffic, SSL, IPS alarms, auth, SSL-VPN, IPsec VPN, admin audit, DHCP asset inventory, periodic stats), rules 100900-100919
 - [x] In-situ log anonymiser for building shareable sample corpora without leaking personal data (`tools/sns-anonymize.py`)
-- [ ] Generalise the log anonymiser to the other platforms (UniFi / MikroTik / FortiGate / Jamf field sets)
+- [x] Generic, format-agnostic log anonymiser for any platform (`tools/log-anonymize.py`) — IPv4/IPv6/MAC/e-mail/DN scrubbing, `--redact-key`, `--scrub-fqdn`, deny-file
+- [x] Community decoder-request workflow — submit anonymised logs via a GitHub issue template ([`CONTRIBUTING.md`](CONTRIBUTING.md))
 - [ ] Propose the UniFi and Stormshield decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
 ## Contributing
 
-PRs welcome! If you have decoders/rules for other devices, feel free to contribute.
+PRs welcome — and you don't have to write a decoder yourself. **[Open a decoder request](../../issues/new?template=decoder-request.yml)** with a few **anonymised** log samples (run them through [`tools/log-anonymize.py`](#log-anonymiser) first — raw logs contain personal data) and we'll build one. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for both paths (requesting vs. contributing) and the anonymisation requirement.
 
 ## License
 

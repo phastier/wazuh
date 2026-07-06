@@ -1,0 +1,68 @@
+name: Decoder request (share anonymised logs)
+description: Ask for a Wazuh decoder/rules for a device or platform not covered yet
+title: "[decoder] <vendor> <product>"
+labels: ["decoder-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping grow this ruleset! To build a decoder we need a few
+        **representative log samples** — but **never paste raw production logs**:
+        they contain personal data (usernames, client IPs, MACs, e-mail addresses,
+        hostnames, certificate DNs). **Anonymise them first** with the tool shipped
+        in this repo:
+
+        ```bash
+        # generic — works on any format; add --redact-key for your user/host fields
+        your-logs | tools/log-anonymize.py --deny-file markers.txt \
+            --redact-key user --redact-key host > shareable.txt
+        # then paste shareable.txt below
+        ```
+
+        See the **Log anonymiser** section of the README. The tool refuses to emit
+        if a marker survives, and never writes a reverse mapping — but you stay
+        responsible for checking the output before posting it publicly.
+  - type: input
+    id: vendor
+    attributes:
+      label: Vendor / product
+      placeholder: e.g. Sophos XG, pfSense, Cisco Meraki, Synology DSM, Watchguard…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Model & firmware / OS version
+      placeholder: e.g. XG-135 / SFOS 20.0
+  - type: dropdown
+    id: transport
+    attributes:
+      label: How are the logs collected into Wazuh?
+      options:
+        - Syslog (UDP/TCP) to the manager
+        - File read by a Wazuh agent (<localfile>)
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: samples
+    attributes:
+      label: Anonymised sample logs
+      description: A handful of representative lines PER event type, run through the anonymiser. Do NOT paste raw logs.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: fields
+    attributes:
+      label: What should be decoded / alerted?
+      description: Which fields matter (src/dst IP, user, action, object name…) and which events deserve an alert vs. plain telemetry.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: These samples are anonymised — no real usernames, IPs, MACs, e-mails, hostnames or certificate DNs.
+          required: true
+        - label: I can validate a proposed decoder with `wazuh-logtest` and report back.
+          required: false
