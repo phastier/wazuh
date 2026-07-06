@@ -104,6 +104,15 @@ Custom decoders and rules for Jamf Pro's application logs — no community Wazuh
 - **Instance install/upgrade tracking** (`jamf-pro-installer.log`): Jamf Pro upgrades, upgrade steps, disk-space warnings (level 5) and install failures (level 10) — the noisy `JAMFSoftwareServer.log` is intentionally *not* collected (99% INFO + a single recurring internal ERROR)
 - **MITRE ATT&CK**: T1110 (Brute Force), T1098 (Account Manipulation), T1555 (Credentials from Password Stores), T1562.001 / T1070 (Impair Defenses / Indicator Removal)
 
+### Authentik IdP (goauthentik)
+Decoders and rules for authentik's structlog JSON, collected through the Docker **journald logging driver** — no syslog listener, no sidecar, no log files to rotate. The audit trail (`logger=authentik.events.models`) is the compliance signal; HTTP access and worker chatter stay decoded at level 0, searchable in the archives.
+
+- **Audit trail**: login / logout with user, client IP and auth method; **failed login (level 5) with brute-force correlation** (6+ failures from the same IP in 2 min → level 10); application authorization; account/credential changes (`user_write`, `password_set`, `password_reset`); admin object changes (providers, flows, policies, applications); **impersonation** and `suspicious_request` (level 8); policy/configuration exceptions
+- **HTTP access** (`authentik.asgi`): every request decoded; 401/403 access denied (level 5), 404s with **scanner correlation** (10+ from the same source in 2 min → level 8 — seen live: `GET /.env` sweeps), 5xx server errors
+- **Framework security** (`django.security.*`) plus a generic warn/error/critical mapping, so no logger escapes unclassified
+- **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
+- **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
+
 ## Architecture
 ```
 MikroTik router (RouterOS) ──┐
@@ -112,7 +121,7 @@ Fortinet FortiGate ──────────┼──► Syslog UDP/514 ─
 Stormshield SNS ─────────────┘
 ```
 
-MikroTik and UniFi send **BSD syslog**; FortiGate and Stormshield SNS send their native **`key=value` syslog**. Wazuh's pre-decoder extracts timestamp and hostname before the custom decoders process the message payload. **Jamf Pro and Linux/Proxmox hosts are collected by the Wazuh agent** (`<localfile>` / journald), not syslog.
+MikroTik and UniFi send **BSD syslog**; FortiGate and Stormshield SNS send their native **`key=value` syslog**. Wazuh's pre-decoder extracts timestamp and hostname before the custom decoders process the message payload. **Jamf Pro, Authentik and Linux/Proxmox hosts are collected by the Wazuh agent** (`<localfile>` / journald), not syslog.
 
 **Jamf Pro is collected differently**: it does not emit syslog, so its `JSSAccess.log` and `JAMFChangeManagement.log` (and `jamf-pro-installer.log`) are read directly on the Jamf Pro host by the Wazuh agent via `<localfile>` — there is no syslog pre-decoder, so the decoders match the raw file lines. See [Device configuration](#jamf-pro-on-prem).
 
@@ -182,6 +191,7 @@ cp decoders/unifi_udm_syslog.xml /var/ossec/etc/decoders/      # UDM system sysl
 cp decoders/unifi_mca.xml /var/ossec/etc/decoders/             # USW-Flex 2.5G + UPS Tower (no syslog timestamp) - see learning #22
 cp decoders/journald_extra.xml /var/ossec/etc/decoders/        # zed, pvescheduler, CRON, qemu-ga, LibreNMS...
 cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner probes on public endpoints
+cp decoders/authentik.xml /var/ossec/etc/decoders/             # Authentik IdP (structlog JSON via journald)
 # Only if you have a Stormshield SNS firewall:
 cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
@@ -200,6 +210,7 @@ cp rules/unifi_mca_rules.xml /var/ossec/etc/rules/             # USW-Flex + UPS 
 cp rules/journald_extra_rules.xml /var/ossec/etc/rules/        # zed, pvescheduler, CRON... (100840-100858)
 cp rules/web_malformed_rules.xml /var/ossec/etc/rules/         # scanner detection (100820-100821)
 cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS (100900-100919)
+cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (101000-101042)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -293,6 +304,29 @@ Jamf Pro writes log4j files under `/usr/local/jss/logs/` — it does **not** sen
 
 > **Why file collection and not syslog?** Jamf Pro's Change Management can alternatively forward to a syslog server (*Settings → System → Change Management → Use Syslog Server*). We deliberately **chose not to** (for now): syslog only covers Change Management — not `JSSAccess.log` or the installer log — it can drop events over UDP, and being line-oriented it would lose the multi-line detail body that carries the **object name** and the FileVault recovery-key signature (`File Vault 2 ID`). File collection via the agent keeps everything, reliably. (Use syslog instead if you only need a condensed change feed forwarded to a central collector.)
 
+### Authentik (Docker → journald)
+Authentik containers write structlog JSON to stdout. Route it through the host's journald with the Docker logging driver — the tag becomes the journald `program_name` the decoder matches on:
+
+```yaml
+# docker-compose.yml — same block on the worker service with tag authentik-worker
+services:
+  server:
+    logging:
+      driver: journald
+      options:
+        tag: authentik-server
+```
+
+Agent side (`/var/ossec/etc/ossec.conf`), the standard journald collection is all it takes:
+```xml
+<localfile>
+  <location>journald</location>
+  <log_format>journald</log_format>
+</localfile>
+```
+
+Recreate the containers (`docker compose up -d`) for the driver change to apply. The decoder carries **no payload regex**: the JSON plugin decoder extracts every key (`logger`, `event`, `action`, `client_ip`, nested `user.username`, `context.*`, `method`, `status`, `remote`), which keeps it robust across authentik releases. Non-JSON payloads (tracebacks) still match the parent decoder, so the severity-mapping rules see them.
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -341,6 +375,10 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
+| 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |
+| 101010-101022 | Authentik | Audit trail (login/logout L3, failed login L5 + brute force L10, app authorization L3, account/credential change L5, config change L5, impersonation L8, suspicious request L8, exceptions L6) |
+| 101030-101034 | Authentik | HTTP access (all decoded L0, 401/403 L5, 404 L3 + scanner correlation L8, 5xx L5) |
+| 101035-101042 | Authentik | Django security L4 + generic warn/error/critical mapping (L4/L5/L7) |
 
 ## Decoded fields
 
@@ -505,6 +543,18 @@ Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`,
 | `http.method` / `http.status` | Protocol plugin (HTTP) | `GET` / `200` |
 | `srcintf` / `dstintf` | Interfaces | `lan` / `wan` |
 
+### Authentik (JSON plugin decoder — all keys extracted)
+| Field | Content | Example |
+|-------|---------|---------|
+| `logger` | structlog logger — the routing key | `authentik.events.models` / `authentik.asgi` |
+| `action` | Audit action (**Wazuh static field** — learning #19) | `login` / `login_failed` / `model_updated` |
+| `client_ip` | Client IP of the audited action | `203.0.113.67` |
+| `user.username` | Acting user (nested JSON) | `jdoe` |
+| `context.username` | Attempted username on failed logins | `admin` |
+| `context.auth_method` | How the user authenticated | `password` / `auth_webauthn_pwl` |
+| `method` / `event` / `remote` | HTTP request: verb, path, client | `GET` / `/api/v3/...` / `203.0.113.67` |
+| `level` | structlog severity | `info` / `warning` / `error` |
+
 ## UniFi CEF Event IDs
 
 These are the UniFi Network, Protect, and OS CEF event IDs we have identified and mapped:
@@ -649,6 +699,7 @@ Two tools ship in `tools/`:
 - [x] In-situ log anonymiser for building shareable sample corpora without leaking personal data (`tools/sns-anonymize.py`)
 - [x] Generic, format-agnostic log anonymiser for any platform (`tools/log-anonymize.py`) — IPv4/IPv6/MAC/e-mail/DN scrubbing, `--redact-key`, `--scrub-fqdn`, deny-file
 - [x] Community decoder-request workflow — submit anonymised logs via a GitHub issue template ([`CONTRIBUTING.md`](CONTRIBUTING.md))
+- [x] Authentik IdP — structlog JSON via the Docker journald driver; audit trail with compliance tagging, brute-force + scanner correlations (rules 101000-101042)
 - [ ] Propose the UniFi and Stormshield decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 

@@ -1,0 +1,236 @@
+<!--
+  Rules for the authentik decoder (goauthentik IdP, structlog JSON via
+  journald). See decoders/authentik.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 101000-101059
+  Philosophy: decode everything, sort by level. Periodic chatter is pinned
+  to level 0 (still searchable in the archives); the audit trail
+  (logger=authentik.events.models) is the compliance signal.
+  Note: the JSON keys "action" and "status" land in Wazuh STATIC fields
+  (reserved names) — matched with <action> for single values and with
+  pcre2 <match> against the raw JSON for value classes.
+-->
+<group name="authentik,">
+
+  <!-- Base: every event from the authentik containers -->
+  <rule id="101000" level="0">
+    <decoded_as>authentik</decoded_as>
+    <description>Authentik: event</description>
+  </rule>
+
+  <!-- ===== Periodic chatter pinned to level 0 (info only: any warning or
+       error from the same loggers falls through to the generic rules) ===== -->
+
+  <!-- Container/compose health checks: /-/health/live and /-/health/ready -->
+  <rule id="101001" level="0">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^authentik\.asgi$</field>
+    <field name="event" type="pcre2">^/-/health/</field>
+    <description>Authentik: health check</description>
+  </rule>
+
+  <!-- Worker task scheduling (Sent N scheduled tasks / Task started...) -->
+  <rule id="101002" level="0">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^django_dramatiq_postgres\.|^authentik\.tasks\.middleware$</field>
+    <field name="level" type="pcre2">^info$</field>
+    <description>Authentik worker: task scheduling chatter</description>
+  </rule>
+
+  <!-- Router certificate refresh loop (updating brand certificates) -->
+  <rule id="101003" level="0">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^authentik\.router</field>
+    <field name="level" type="pcre2">^info$</field>
+    <description>Authentik router: periodic chatter</description>
+  </rule>
+
+  <!-- ===== Audit trail (authentik.events.models) ===== -->
+
+  <!-- Any audit event alerts at least at level 3 (catch-all for actions
+       without a dedicated child rule) -->
+  <rule id="101010" level="3">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^authentik\.events\.models$</field>
+    <description>Authentik audit event from $(client_ip)</description>
+    <group>audit,</group>
+  </rule>
+
+  <rule id="101011" level="3">
+    <if_sid>101010</if_sid>
+    <action>login</action>
+    <description>Authentik: successful login of $(user.username) from $(client_ip) ($(context.auth_method))</description>
+    <group>authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <rule id="101012" level="3">
+    <if_sid>101010</if_sid>
+    <action>logout</action>
+    <description>Authentik: logout of $(user.username) from $(client_ip)</description>
+    <group>authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="101013" level="5">
+    <if_sid>101010</if_sid>
+    <action>login_failed</action>
+    <description>Authentik: FAILED login (user $(context.username)) from $(client_ip)</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <rule id="101014" level="10" frequency="6" timeframe="120">
+    <if_matched_sid>101013</if_matched_sid>
+    <same_field>client_ip</same_field>
+    <description>Authentik: possible brute force from $(client_ip) (6+ failed logins in 2 min)</description>
+    <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <rule id="101015" level="3">
+    <if_sid>101010</if_sid>
+    <action>authorize_application</action>
+    <description>Authentik: $(user.username) authorized $(context.authorized_application.name) from $(client_ip)</description>
+    <group>authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Account lifecycle / credential changes -->
+  <rule id="101016" level="5">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "(?:user_write|password_set|password_reset)"</match>
+    <description>Authentik audit: account/credential change for $(user.username) from $(client_ip)</description>
+    <group>account_changed,pci_dss_8.1.2,gpg13_4.13,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AC.2,tsc_CC6.8,</group>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+  <!-- Admin object changes (providers, flows, policies, apps...) -->
+  <rule id="101017" level="5">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "model_(?:created|updated|deleted)"</match>
+    <description>Authentik config: object change ($(context.model.model_name) "$(context.model.name)") by $(user.username)</description>
+    <group>config_changed,pci_dss_10.2.7,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,tsc_CC8.1,</group>
+  </rule>
+
+  <!-- Sensitive operations -->
+  <rule id="101018" level="8">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "impersonation_(?:started|ended)"</match>
+    <description>Authentik: impersonation by $(user.username) from $(client_ip)</description>
+    <group>account_changed,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <rule id="101019" level="8">
+    <if_sid>101010</if_sid>
+    <action>suspicious_request</action>
+    <description>Authentik: suspicious request from $(client_ip)</description>
+    <group>attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,</group>
+  </rule>
+
+  <rule id="101020" level="6">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "(?:policy_exception|property_mapping_exception|configuration_error|system_exception|system_task_exception)"</match>
+    <description>Authentik: policy/configuration exception — IdP internal error</description>
+    <group>system_error,</group>
+  </rule>
+
+  <rule id="101021" level="4">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "(?:secret_view|secret_rotate|invitation_used|source_linked)"</match>
+    <description>Authentik audit: secret/invitation/source event by $(user.username) from $(client_ip)</description>
+    <group>audit,gdpr_IV_32.2,hipaa_164.312.b,tsc_CC6.8,</group>
+  </rule>
+
+  <rule id="101022" level="3">
+    <if_sid>101010</if_sid>
+    <match type="pcre2">"action": "(?:update_available|email_sent)"</match>
+    <description>Authentik: housekeeping notification</description>
+    <group>audit,</group>
+  </rule>
+
+  <!-- ===== HTTP access (authentik.asgi) ===== -->
+
+  <!-- All requests decode and stay searchable; alerts only on anomalies -->
+  <rule id="101030" level="0">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^authentik\.asgi$</field>
+    <description>Authentik HTTP: $(method) $(event)</description>
+    <group>accesslog,</group>
+  </rule>
+
+  <rule id="101031" level="5">
+    <if_sid>101030</if_sid>
+    <match type="pcre2">"status": 40[13],</match>
+    <description>Authentik HTTP: access denied $(method) $(event) from $(remote)</description>
+    <group>access_denied,pci_dss_10.2.4,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,</group>
+  </rule>
+
+  <rule id="101032" level="3">
+    <if_sid>101030</if_sid>
+    <match type="pcre2">"status": 40[45],</match>
+    <description>Authentik HTTP: not found $(method) $(event) from $(remote)</description>
+    <group>accesslog,</group>
+  </rule>
+
+  <!-- Scanners probing the public endpoint (seen live: GET /.env) -->
+  <rule id="101033" level="8" frequency="10" timeframe="120">
+    <if_matched_sid>101032</if_matched_sid>
+    <same_field>remote</same_field>
+    <description>Authentik HTTP: scan from $(remote) (10+ 404s in 2 min)</description>
+    <group>web_scan,recon,pci_dss_11.4,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,</group>
+    <mitre>
+      <id>T1595</id>
+    </mitre>
+  </rule>
+
+  <rule id="101034" level="5">
+    <if_sid>101030</if_sid>
+    <match type="pcre2">"status": 5\d\d,</match>
+    <description>Authentik HTTP: server error on $(method) $(event)</description>
+    <group>system_error,</group>
+  </rule>
+
+  <!-- ===== Framework security (django.security.*) ===== -->
+  <rule id="101035" level="4">
+    <if_sid>101000</if_sid>
+    <field name="logger" type="pcre2">^django\.security\.</field>
+    <description>Authentik/Django security: $(event)</description>
+    <group>access_denied,pci_dss_6.5.9,gdpr_IV_35.7.d,tsc_CC6.1,</group>
+  </rule>
+
+  <!-- ===== Generic severity mapping (any logger not matched above;
+       sqlx lines have no logger and use level=warn) ===== -->
+  <rule id="101040" level="4">
+    <if_sid>101000</if_sid>
+    <field name="level" type="pcre2">^warn(?:ing)?$</field>
+    <description>Authentik: warning — $(event)</description>
+  </rule>
+
+  <rule id="101041" level="5">
+    <if_sid>101000</if_sid>
+    <field name="level" type="pcre2">^error$</field>
+    <description>Authentik: error — $(event)</description>
+    <group>system_error,</group>
+  </rule>
+
+  <rule id="101042" level="7">
+    <if_sid>101000</if_sid>
+    <field name="level" type="pcre2">^critical$</field>
+    <description>Authentik: CRITICAL — $(event)</description>
+    <group>system_error,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,24 @@
+<!--
+  Authentik IdP (goauthentik) — structlog JSON collected through the Docker
+  journald logging driver (compose logging tags: authentik-server /
+  authentik-worker) and the agent journald localfile.
+
+  Every payload is single-line JSON. Notable shapes:
+    - HTTP access:   logger=authentik.asgi  (method, event=path, status, remote)
+    - Audit trail:   logger=authentik.events.models (action, client_ip,
+                     nested user.username, context.*)
+    - Worker chatter: django_dramatiq_postgres.scheduler / authentik.tasks.*
+    - Embedded sqlx (Rust) lines have no "logger" and use level=warn.
+  Non-JSON payloads (tracebacks) still match the parent decoder so rules can
+  see them.
+-->
+
+<decoder name="authentik">
+  <program_name>^authentik-server$|^authentik-worker$</program_name>
+</decoder>
+
+<decoder name="authentik-json">
+  <parent>authentik</parent>
+  <prematch>^{"</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
