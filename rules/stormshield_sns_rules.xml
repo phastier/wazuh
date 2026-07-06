@@ -24,7 +24,7 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
     <field name="fw.action">pass</field>
-    <description>Stormshield: allowed $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <description>Stormshield: allowed $(protocol) $(srcname) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
     <group>stormshield,firewall,allowed,</group>
   </rule>
 
@@ -33,8 +33,18 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
     <field name="fw.action">block</field>
-    <description>Stormshield: blocked $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <description>Stormshield: blocked $(protocol) $(srcname) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
     <group>stormshield,firewall,denied,</group>
+  </rule>
+
+  <!-- filter/connection to/from the firewall itself carry no action= — classify
+       them as telemetry so they don't fall onto the level-3 base "event" rule. -->
+  <rule id="100920" level="1">
+    <if_sid>100900</if_sid>
+    <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
+    <field name="fw.action" type="pcre2">^$</field>
+    <description>Stormshield: $(protocol) $(srcname) $(srcip) -> $(dstip):$(dstport) (no verdict)</description>
+    <group>stormshield,firewall,</group>
   </rule>
 
   <!-- SSL/TLS inspection -->
