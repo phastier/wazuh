@@ -1,6 +1,6 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Synology DSM (NAS)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
@@ -19,6 +19,7 @@ When we set out to integrate our network infrastructure into Wazuh, we found tha
 - UniFi CEF events (WiFi client tracking, admin access) were **not decoded at all**
 - Fortinet built-in decoders work well, but **without tuning, mDNS/Bonjour noise drowns out real alerts** — especially in Apple-heavy environments
 - **Stormshield SNS** firewalls emit a rich `key="value"` syslog — traffic decisions, IPS alarms, IPsec/SSL VPN, admin audit, DHCP — that **no community Wazuh decoder** handles, so every event landed undecoded
+- **Synology DSM** can forward its Log Center to a syslog server, but there are **no community decoders** for what it sends — sign-ins, shared-folder access and the per-file SMB transfer log all landed as unclassified noise, when a NAS is precisely where your backups (a ransomware's first target) live
 - Documentation on Wazuh PCRE2 limitations was scattered and incomplete
 
 This repository provides production-tested decoders and rules that actually work, along with noise suppression tuning for real-world mixed environments.
@@ -639,6 +640,19 @@ Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`,
 | `context.auth_method` | How the user authenticated | `password` / `auth_webauthn_pwl` |
 | `method` / `event` / `remote` | HTTP request: verb, path, client | `GET` / `/api/v3/...` / `203.0.113.67` |
 | `level` | structlog severity | `info` / `warning` / `error` |
+
+### Synology DSM
+| Field | Content | Example |
+|-------|---------|---------|
+| `dstuser` | Account involved (sign-in, share access, file op) | `jdoe` |
+| `srcip` | Client IP — for share access, may be `HOST(ip)` as sent by DSM | `203.0.113.67` / `LAPTOP-01(203.0.113.67)` |
+| `synology.service` | DSM service signed in to | `DSM` |
+| `synology.method` | Authentication method | `password` / `sso` |
+| `synology.protocol` | Share access protocol | `CIFS(SMB3)` / `AFP` |
+| `synology.share` | Shared folder accessed | `Projects` |
+| `synology.op` | SMB transfer-log operation | `read` / `write` / `delete` / `rename` |
+| `synology.path` | File path (`old -> new` for renames) | `/Projects/report.xlsx` |
+| `synology.objtype` | Object type | `File` / `Folder` |
 
 ## UniFi CEF Event IDs
 
