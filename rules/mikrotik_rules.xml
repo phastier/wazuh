@@ -35,6 +35,23 @@
     <group>mikrotik,firewall,drop,input,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
+  <rule id="100204" level="6">
+    <if_sid>100201</if_sid>
+    <match>INPUT</match>
+    <description>MikroTik: Firewall DROP INPUT IPv6 (traffic to router) - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
+    <group>mikrotik,firewall,drop,input,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
+  </rule>
+
+  <!-- MNDP (MikroTik neighbor discovery, udp/5678) broadcast hitting the
+       router: pure LAN chatter, traced without alerting — the real fix is
+       restricting /ip neighbor discovery-settings at the source -->
+  <rule id="100205" level="1">
+    <if_sid>100203,100204</if_sid>
+    <match>:5678, len </match>
+    <description>MikroTik: MNDP discovery broadcast dropped (in:$(srcintf))</description>
+    <group>mikrotik,firewall,drop,input,mndp,</group>
+  </rule>
+
   <!-- High frequency DROP from same source -->
   <rule id="100210" level="8" frequency="20" timeframe="60">
     <if_matched_sid>100200</if_matched_sid>

@@ -19,9 +19,11 @@
 <decoder name="mikrotik-fw-drop-ipv6-parent">
   <prematch type="pcre2">^DROP : IPv6</prematch>
 </decoder>
+<!-- src-mac is optional: INPUT-chain logs (packets addressed to the router,
+     e.g. MNDP on the WAN port) carry no src-mac segment -->
 <decoder name="mikrotik-fw-drop-ipv6">
   <parent>mikrotik-fw-drop-ipv6-parent</parent>
-  <regex type="pcre2">DROP : IPv6 (\S+) .+?: in:(\S+) out:\(?([^),]+)\)?, connection-state:(\S+) src-mac ([0-9A-Fa-f:]+), proto (\S+)(?: \(([^)]+)\))?, \[([a-f0-9:]+)\]:(\d+)->\[([a-f0-9:]+)\]:(\d+), len (\d+)</regex>
+  <regex type="pcre2">DROP : IPv6 (\S+) .+?: in:(\S+) out:\(?([^),]+)\)?, connection-state:(\S+?)(?: src-mac ([0-9A-Fa-f:]+),)? proto (\S+)(?: \(([^)]+)\))?, \[([a-fA-F0-9:]+)\]:(\d+)->\[([a-fA-F0-9:]+)\]:(\d+), len (\d+)</regex>
   <order>action, srcintf, dstintf, status, extra_data, protocol, data, srcip, srcport, dstip, dstport, id</order>
 </decoder>
 
