@@ -50,17 +50,17 @@
   <!-- SYSTEM EVENTS        -->
   <!-- ==================== -->
 
-  <!-- Performance stats -->
+  <!-- Performance stats (81602/81603: notice-level events land on 81603) -->
   <rule id="100420" level="3">
-    <if_sid>81602</if_sid>
+    <if_sid>81602,81603</if_sid>
     <match>action="perf-stats"</match>
-    <description>Fortigate: Performance stats - CPU=$(cpu) MEM=$(mem) Sessions=$(totalsession)</description>
+    <description>Fortigate: Performance stats</description>
     <group>fortigate,system,performance,</group>
   </rule>
 
   <!-- Disk log rotation -->
   <rule id="100421" level="4">
-    <if_sid>81602</if_sid>
+    <if_sid>81602,81603</if_sid>
     <match>logdesc="Disk log file deleted"</match>
     <description>Fortigate: Disk log rotation</description>
     <group>fortigate,system,disk,pci_dss_10.5.2,gdpr_IV_35.7.d,</group>
@@ -68,7 +68,7 @@
 
   <!-- FortiSandbox AV update -->
   <rule id="100422" level="3">
-    <if_sid>81602</if_sid>
+    <if_sid>81602,81603</if_sid>
     <match>FortiSandbox AV database updated</match>
     <description>Fortigate: AV database updated</description>
     <group>fortigate,system,update,</group>
@@ -141,6 +141,32 @@
     <match>action="tunnel-stats"|action="negotiate"|action="install_sa"</match>
     <description>Fortigate: IPsec housekeeping ($(logdesc)) on tunnel $(vpntunnel)</description>
     <group>fortigate,vpn,</group>
+  </rule>
+
+  <!-- ============================== -->
+  <!-- EDGE LOCAL-IN DENY (WAN side)  -->
+  <!-- ============================== -->
+  <!-- Internet background noise hitting the firewall itself: classified as
+       telemetry (traced, no alert), srcintfrole="wan" discriminates the
+       origin without any site-specific prefix list. LAN-side local denies
+       stay on 81618 (mDNS/LLMNR chatter is already suppressed by 100400/1). -->
+  <rule id="100446" level="1">
+    <if_sid>81618</if_sid>
+    <match>subtype="local"</match>
+    <regex type="pcre2">srcintfrole="wan".*action="deny"</regex>
+    <description>Fortigate: edge local-in deny from WAN - $(srcip) -> port $(dstport)</description>
+    <group>fortigate,firewall,edge_noise,</group>
+  </rule>
+
+  <!-- The same external source hammering the edge = scan/probe campaign -->
+  <rule id="100447" level="8" frequency="30" timeframe="120">
+    <if_matched_sid>100446</if_matched_sid>
+    <same_srcip />
+    <description>Fortigate: WAN source $(srcip) probing the edge (30+ local-in denies in 2 min)</description>
+    <mitre>
+      <id>T1595</id>
+    </mitre>
+    <group>fortigate,firewall,attack,recon,multiple_drops,pci_dss_1.4,pci_dss_10.6.1,pci_dss_11.4,gdpr_IV_35.7.d,hipaa_164.312.a.1,hipaa_164.312.b,nist_800_53_SC.7,nist_800_53_AU.6,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
 </group>

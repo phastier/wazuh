@@ -419,6 +419,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
 | 100430 | FortiGate | Correlation (repeated VPN denies) |
 | 100440-100445 | FortiGate | IPsec tunnel state (tunnel down L8, up L3, phase-2 L5/L3, flapping L10, stats/negotiation traced L1) |
+| 100446-100447 | FortiGate | Edge local-in deny from WAN (telemetry L1, `srcintfrole="wan"` — no site-specific prefix list) + same-source probe campaign L8 |
 | 100500-100507 | Jamf Pro | Authentication (login, logout, token, failed login, password change, brute force) |
 | 100510-100516 | Jamf Pro | Change management (READ surfaced at low level + object name, sensitive objects + FileVault PRK escalated, create/update/delete) |
 | 100520-100525 | Jamf Pro | Sensitive object changes (API client/secret, account, MDM commands incl. destructive erase/wipe, security settings, audit log retention) |
