@@ -21,14 +21,14 @@
     <if_sid>100840</if_sid>
     <field name="zfs.class" type="pcre2">^(?:io|data|io_failure|checksum)$</field>
     <description>ZFS: $(zfs.class) error on pool $(zfs.pool) (eid $(zfs.eid)$(zfs.detail))</description>
-    <group>zfs,storage_error,</group>
+    <group>zfs,storage_error,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
   </rule>
 
   <rule id="100842" level="12" frequency="10" timeframe="60">
     <if_matched_sid>100841</if_matched_sid>
     <same_field>zfs.pool</same_field>
     <description>ZFS: error burst on pool $(zfs.pool) (10+ in 1 min) — pool in distress</description>
-    <group>zfs,storage_error,</group>
+    <group>zfs,storage_error,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
   </rule>
 
   <!-- Scrubs: informational -->
@@ -51,7 +51,7 @@
     <if_sid>100845</if_sid>
     <field name="level" type="pcre2">^ERROR$</field>
     <description>Proxmox: ERROR on backup of VM $(vm.id)</description>
-    <group>proxmox,backup,backup_failure,</group>
+    <group>proxmox,backup,backup_failure,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
   </rule>
 
   <rule id="100847" level="1">
@@ -85,7 +85,7 @@
     <if_sid>100855</if_sid>
     <field name="lnms.level" type="pcre2">^(?:ERROR|CRITICAL|WARNING)$</field>
     <description>LibreNMS: $(lnms.component) at $(lnms.level) — $(lnms.detail)</description>
-    <group>librenms,monitoring_error,</group>
+    <group>librenms,monitoring_error,system_error,gpg13_4.3,gdpr_IV_35.7.d,</group>
   </rule>
 
   <rule id="100857" level="1">

@@ -35,7 +35,7 @@
     <if_sid>81618</if_sid>
     <match>vpntype="ipsecvpn" action="deny"</match>
     <description>Fortigate: VPN IPsec traffic denied - $(srcip) to $(dstip) via $(dstintf)</description>
-    <group>fortigate,vpn,deny,</group>
+    <group>fortigate,vpn,deny,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- VPN events -->
@@ -63,7 +63,7 @@
     <if_sid>81602</if_sid>
     <match>logdesc="Disk log file deleted"</match>
     <description>Fortigate: Disk log rotation</description>
-    <group>fortigate,system,disk,</group>
+    <group>fortigate,system,disk,pci_dss_10.5.2,gdpr_IV_35.7.d,</group>
   </rule>
 
   <!-- FortiSandbox AV update -->
@@ -82,7 +82,7 @@
   <rule id="100430" level="8" frequency="10" timeframe="60">
     <if_matched_sid>100410</if_matched_sid>
     <description>Fortigate: Repeated VPN IPsec denies - possible routing issue or unauthorized access</description>
-    <group>fortigate,vpn,alert,</group>
+    <group>fortigate,vpn,alert,multiple_drops,pci_dss_1.4,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.a.1,hipaa_164.312.b,nist_800_53_SC.7,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- ============================== -->
@@ -99,7 +99,7 @@
     <if_sid>81636</if_sid>
     <match>action="tunnel-down"</match>
     <description>Fortigate: IPsec tunnel $(vpntunnel) DOWN (peer $(remip))</description>
-    <group>fortigate,vpn,tunnel_state,</group>
+    <group>fortigate,vpn,tunnel_state,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- IPsec tunnel up: link restored -->
@@ -131,7 +131,7 @@
     <if_matched_sid>100440</if_matched_sid>
     <same_field>vpntunnel</same_field>
     <description>Fortigate: IPsec tunnel $(vpntunnel) flapping (4+ drops in 10 min)</description>
-    <group>fortigate,vpn,tunnel_state,flapping,</group>
+    <group>fortigate,vpn,tunnel_state,flapping,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Periodic tunnel statistics and negotiation progress: noise, traced

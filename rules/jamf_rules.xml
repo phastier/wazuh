@@ -25,21 +25,21 @@
     <if_sid>100500</if_sid>
     <field name="jamf_status">^Successful Login$</field>
     <description>Jamf Pro: successful login - $(srcuser) via $(jamf_entrypoint) from $(srcip)</description>
-    <group>jamf,authentication,authentication_success,</group>
+    <group>jamf,authentication,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100502" level="3">
     <if_sid>100500</if_sid>
     <field name="jamf_status">^Successful Logout$</field>
     <description>Jamf Pro: logout - $(srcuser) from $(srcip)</description>
-    <group>jamf,authentication,</group>
+    <group>jamf,authentication,authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100503" level="4">
     <if_sid>100500</if_sid>
     <field name="jamf_status">token creation$</field>
     <description>Jamf Pro: API token created - $(srcuser) via $(jamf_entrypoint) from $(srcip)</description>
-    <group>jamf,authentication,api,</group>
+    <group>jamf,authentication,api,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100504" level="8">
@@ -49,14 +49,14 @@
     <mitre>
       <id>T1110</id>
     </mitre>
-    <group>jamf,authentication,authentication_failed,</group>
+    <group>jamf,authentication,authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100505" level="8">
     <if_sid>100500</if_sid>
     <field name="jamf_status">^Failed token creation$</field>
     <description>Jamf Pro: FAILED token creation - $(srcuser) from $(srcip)</description>
-    <group>jamf,authentication,authentication_failed,api,</group>
+    <group>jamf,authentication,authentication_failed,api,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100506" level="10" frequency="6" timeframe="120">
@@ -66,14 +66,14 @@
     <mitre>
       <id>T1110</id>
     </mitre>
-    <group>jamf,authentication,authentication_failures,</group>
+    <group>jamf,authentication,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100507" level="8">
     <if_sid>100500</if_sid>
     <field name="jamf_entrypoint">Change Password</field>
     <description>Jamf Pro: password change - $(srcuser) from $(srcip)</description>
-    <group>jamf,authentication,account_changed,</group>
+    <group>jamf,authentication,account_changed,pci_dss_8.1.2,gpg13_4.13,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AC.2,tsc_CC6.8,</group>
   </rule>
 
   <!-- ============================================================ -->
@@ -101,7 +101,7 @@
     <if_sid>100511</if_sid>
     <field name="jamf_object">^Account$|^API Client|Settings$|Conditional Access|Change Management|Push Certificate|Log Flushing</field>
     <description>Jamf Pro: read access to sensitive object - $(jamf_object) by $(srcuser)</description>
-    <group>jamf,audit,read,sensitive,</group>
+    <group>jamf,audit,read,sensitive,pci_dss_10.2.1,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,</group>
   </rule>
 
   <!-- FileVault recovery key (PRK) viewed: Jamf logs this as an empty-object READ
@@ -114,28 +114,28 @@
     <mitre>
       <id>T1555</id>
     </mitre>
-    <group>jamf,audit,filevault,recovery_key,sensitive,</group>
+    <group>jamf,audit,filevault,recovery_key,sensitive,pci_dss_10.2.1,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.6,tsc_CC6.8,</group>
   </rule>
 
   <rule id="100512" level="5">
     <if_sid>100510</if_sid>
     <field name="jamf_action">^CREATE$</field>
     <description>Jamf Pro: object created - $(jamf_object) by $(srcuser)</description>
-    <group>jamf,audit,create,</group>
+    <group>jamf,audit,create,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <rule id="100513" level="5">
     <if_sid>100510</if_sid>
     <field name="jamf_action">^UPDATE$</field>
     <description>Jamf Pro: object modified - $(jamf_object) by $(srcuser)</description>
-    <group>jamf,audit,update,</group>
+    <group>jamf,audit,update,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <rule id="100514" level="7">
     <if_sid>100510</if_sid>
     <field name="jamf_action">^DELETE$</field>
     <description>Jamf Pro: object deleted - $(jamf_object) by $(srcuser)</description>
-    <group>jamf,audit,delete,</group>
+    <group>jamf,audit,delete,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- High-value object overrides (apply to CREATE/UPDATE/DELETE) -->
@@ -146,7 +146,7 @@
     <mitre>
       <id>T1098</id>
     </mitre>
-    <group>jamf,audit,account_changed,authentication,</group>
+    <group>jamf,audit,account_changed,authentication,pci_dss_8.1.2,pci_dss_10.2.5,gpg13_4.13,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.2,tsc_CC6.8,</group>
   </rule>
 
   <rule id="100521" level="10">
@@ -156,14 +156,14 @@
     <mitre>
       <id>T1098</id>
     </mitre>
-    <group>jamf,audit,account_changed,</group>
+    <group>jamf,audit,account_changed,pci_dss_8.1.2,pci_dss_10.2.5,gpg13_4.13,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.2,tsc_CC6.8,</group>
   </rule>
 
   <rule id="100522" level="9">
     <if_sid>100512,100513,100514</if_sid>
     <field name="jamf_object">Command$</field>
     <description>Jamf Pro: MDM command issued - $(jamf_object) by $(srcuser)</description>
-    <group>jamf,audit,mdm,command,</group>
+    <group>jamf,audit,mdm,command,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
   </rule>
 
   <rule id="100523" level="8">
@@ -173,7 +173,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>jamf,audit,policy_changed,</group>
+    <group>jamf,audit,policy_changed,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Audit log retention / flushing change = potential anti-forensics
@@ -186,7 +186,7 @@
       <id>T1562.001</id>
       <id>T1070</id>
     </mitre>
-    <group>jamf,audit,policy_changed,log_retention,</group>
+    <group>jamf,audit,policy_changed,log_retention,config_changed,pci_dss_10.2.7,pci_dss_10.5.2,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Destructive MDM commands (erase / wipe / unmanage) escalated above the
@@ -198,7 +198,7 @@
     <mitre>
       <id>T1561</id>
     </mitre>
-    <group>jamf,audit,mdm,command,destructive,</group>
+    <group>jamf,audit,mdm,command,destructive,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
   </rule>
 
   <!-- ============================================================ -->
@@ -214,7 +214,7 @@
     <if_sid>100530</if_sid>
     <match>has been installed</match>
     <description>Jamf Pro: instance installed/upgraded</description>
-    <group>jamf,installer,upgrade,</group>
+    <group>jamf,installer,upgrade,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <rule id="100532" level="5">
@@ -235,7 +235,7 @@
     <if_sid>100530</if_sid>
     <match>failed|Failed|FAILED|Error|ERROR|Unable</match>
     <description>Jamf Pro installer: FAILURE - $(jamf_installer_msg)</description>
-    <group>jamf,installer,failure,</group>
+    <group>jamf,installer,failure,system_error,gpg13_4.3,gdpr_IV_35.7.d,</group>
   </rule>
 
 </group>

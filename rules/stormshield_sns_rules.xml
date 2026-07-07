@@ -34,7 +34,7 @@
     <field name="logtype" type="pcre2">^(?:filter|connection)$</field>
     <field name="fw.action">block</field>
     <description>Stormshield: blocked $(protocol) $(srcname) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
-    <group>stormshield,firewall,denied,</group>
+    <group>stormshield,firewall,denied,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- filter/connection to/from the firewall itself carry no action= — classify
@@ -58,7 +58,7 @@
     <if_sid>100903</if_sid>
     <field name="fw.action">block</field>
     <description>Stormshield SSL blocked: $(sns.msg) ($(srcip) -> $(dstip))</description>
-    <group>stormshield,firewall,ssl,denied,</group>
+    <group>stormshield,firewall,ssl,denied,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- IPS / protection alarms -->
@@ -66,13 +66,13 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^alarm$</field>
     <description>Stormshield IPS alarm: $(sns.msg) (id $(alarm.id), class $(alarm.class))</description>
-    <group>stormshield,firewall,ids,</group>
+    <group>stormshield,firewall,ids,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
   <rule id="100906" level="10">
     <if_sid>100905</if_sid>
     <field name="alarm.risk" type="pcre2">^(?:[7-9]|10)$</field>
     <description>Stormshield IPS high-risk alarm (risk $(alarm.risk)): $(sns.msg)</description>
-    <group>stormshield,firewall,ids,</group>
+    <group>stormshield,firewall,ids,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Authentication events (e.g. weak password hash in use) -->
@@ -80,7 +80,7 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^auth$</field>
     <description>Stormshield auth: $(sns.msg) (user $(srcuser))</description>
-    <group>stormshield,firewall,authentication,</group>
+    <group>stormshield,firewall,authentication,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,</group>
   </rule>
 
   <!-- SSL VPN activity (nominative remote access) -->
@@ -88,7 +88,7 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^xvpn$</field>
     <description>Stormshield SSL VPN: $(sns.msg) (user $(srcuser) from $(srcip))</description>
-    <group>stormshield,firewall,vpn,authentication,</group>
+    <group>stormshield,firewall,vpn,authentication,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,</group>
   </rule>
 
   <!-- System events (dhcp, ...) -->
@@ -130,13 +130,13 @@
     <if_sid>100900</if_sid>
     <field name="logtype" type="pcre2">^server$</field>
     <description>Stormshield admin: $(srcuser)@$(srcip): $(sns.msg)</description>
-    <group>stormshield,firewall,authentication,administration,</group>
+    <group>stormshield,firewall,authentication,administration,authentication_success,pci_dss_10.2.2,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
   <rule id="100914" level="8">
     <if_sid>100913</if_sid>
     <field name="sns.msg" type="pcre2">(?i)\b(SET|ADD|DELETE|MODIF|CREATE|REMOVE|ACTIVATE|WRITE|IMPORT|UPLOAD|INSERT|UPDATE|RENAME|DELUSER|ADDUSER)\b</field>
     <description>Stormshield admin config change by $(srcuser)@$(srcip): $(sns.msg)</description>
-    <group>stormshield,firewall,administration,config_changed,</group>
+    <group>stormshield,firewall,administration,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- vpn: IPsec (IKE) tunnel events -->
@@ -150,7 +150,7 @@
     <if_sid>100915</if_sid>
     <field name="sns.msg" type="pcre2">(?i)(fail|error|refus|invalid|no proposal|timeout|unreach|denied|reject|cannot|unable)</field>
     <description>Stormshield IPsec VPN issue: $(sns.msg) ($(srcip) -> $(dstip))</description>
-    <group>stormshield,firewall,vpn,</group>
+    <group>stormshield,firewall,vpn,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- periodic statistics (telemetry, archived, sub-alert) -->

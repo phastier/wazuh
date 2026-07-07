@@ -25,7 +25,7 @@
     <if_sid>100770</if_sid>
     <status>^down$</status>
     <description>USW-Flex $(device.name): port $(port) link DOWN</description>
-    <group>unifi,usw_flex,link,</group>
+    <group>unifi,usw_flex,link,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100773" level="3">
@@ -47,7 +47,7 @@
     <if_matched_sid>100774</if_matched_sid>
     <same_field>device.name</same_field>
     <description>UPS $(device.name): persistent inform failures (10+ in 10 min) — controller unreachable or overloaded</description>
-    <group>unifi,ups,inform_failure,</group>
+    <group>unifi,ups,inform_failure,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- UPS: inform retry counter (informational, escalates through 100775) -->

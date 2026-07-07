@@ -12,19 +12,19 @@
   <rule id="100200" level="3">
     <decoded_as>mikrotik-fw-drop-ipv4-parent</decoded_as>
     <description>MikroTik: Firewall DROP IPv4 - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
-    <group>mikrotik,firewall,drop,</group>
+    <group>mikrotik,firewall,drop,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <rule id="100201" level="3">
     <decoded_as>mikrotik-fw-drop-ipv6-parent</decoded_as>
     <description>MikroTik: Firewall DROP IPv6 - $(protocol) $(srcip) -> $(dstip)</description>
-    <group>mikrotik,firewall,drop,ipv6,</group>
+    <group>mikrotik,firewall,drop,ipv6,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <rule id="100202" level="4">
     <decoded_as>mikrotik-fw-invalid-parent</decoded_as>
     <description>MikroTik: Invalid forward - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
-    <group>mikrotik,firewall,invalid,</group>
+    <group>mikrotik,firewall,invalid,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- DROP INPUT: traffic directed at the router itself -->
@@ -32,7 +32,7 @@
     <if_sid>100200</if_sid>
     <match>INPUT</match>
     <description>MikroTik: Firewall DROP INPUT (traffic to router) - $(protocol) $(srcip):$(srcport) -> $(dstip):$(dstport)</description>
-    <group>mikrotik,firewall,drop,input,</group>
+    <group>mikrotik,firewall,drop,input,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- High frequency DROP from same source -->
@@ -40,14 +40,17 @@
     <if_matched_sid>100200</if_matched_sid>
     <same_srcip />
     <description>MikroTik: Multiple firewall DROPs from $(srcip) - possible scan</description>
-    <group>mikrotik,firewall,attack,</group>
+    <mitre>
+      <id>T1595</id>
+    </mitre>
+    <group>mikrotik,firewall,attack,multiple_drops,recon,pci_dss_1.4,pci_dss_10.6.1,pci_dss_11.4,gdpr_IV_35.7.d,hipaa_164.312.a.1,hipaa_164.312.b,nist_800_53_SC.7,nist_800_53_AU.6,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100211" level="8" frequency="20" timeframe="60">
     <if_matched_sid>100202</if_matched_sid>
     <same_srcip />
     <description>MikroTik: Multiple invalid forwards from $(srcip)</description>
-    <group>mikrotik,firewall,attack,</group>
+    <group>mikrotik,firewall,attack,multiple_drops,pci_dss_1.4,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.a.1,hipaa_164.312.b,nist_800_53_SC.7,nist_800_53_AU.6,</group>
   </rule>
 
   <!-- ================================ -->
@@ -61,7 +64,7 @@
     <mitre>
       <id>T1078</id>
     </mitre>
-    <group>mikrotik,authentication,login,</group>
+    <group>mikrotik,authentication,login,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
 
@@ -70,7 +73,7 @@
     <decoded_as>mikrotik-login-parent</decoded_as>
     <match>logged out</match>
     <description>MikroTik: User '$(srcuser)' logged out from $(srcip) via $(protocol)</description>
-    <group>mikrotik,authentication,logout,</group>
+    <group>mikrotik,authentication,logout,authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Login from non-RFC1918 address -->
@@ -81,7 +84,7 @@
     <mitre>
       <id>T1133</id>
     </mitre>
-    <group>mikrotik,authentication,login,external,</group>
+    <group>mikrotik,authentication,login,external,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Multiple logins -->
@@ -92,7 +95,7 @@
     <mitre>
       <id>T1110</id>
     </mitre>
-    <group>mikrotik,authentication,brute_force,</group>
+    <group>mikrotik,authentication,brute_force,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- ================================ -->

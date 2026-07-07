@@ -40,6 +40,6 @@
     <if_sid>100371</if_sid>
     <field name="ap_temp" type="pcre2">^(9\d|\d{3})$</field>
     <description>UniFi AP: HIGH temperature - $(sensor_zone) $(ap_temp)C (fan $(fan_speed)%)</description>
-    <group>unifi,ap,telemetry,thermal,</group>
+    <group>unifi,ap,telemetry,thermal,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 </group>

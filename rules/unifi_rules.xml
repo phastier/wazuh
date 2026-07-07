@@ -16,7 +16,7 @@
     <if_sid>100300</if_sid>
     <match>Drop|Reject|Block</match>
     <description>UniFi: Firewall DROP/REJECT</description>
-    <group>unifi,firewall,drop,</group>
+    <group>unifi,firewall,drop,firewall_drop,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,</group>
   </rule>
 
   <rule id="100302" level="0">
@@ -73,14 +73,14 @@
     <mitre>
       <id>T1078</id>
     </mitre>
-    <group>unifi,protect,admin,audit,</group>
+    <group>unifi,protect,admin,audit,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Protect: Multiple smart detections correlation -->
   <rule id="100315" level="8" frequency="10" timeframe="60">
     <if_matched_sid>100310</if_matched_sid>
     <description>UniFi Protect: Multiple smart detections - possible intrusion</description>
-    <group>unifi,protect,smartdetect,alert,</group>
+    <group>unifi,protect,smartdetect,alert,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Protect: Camera tamper (CEF 2161 smartDetectTamper) - physical security -->
@@ -88,7 +88,7 @@
     <if_sid>100312</if_sid>
     <match>smartDetectTamper</match>
     <description>UniFi Protect: Camera tamper - $(extra_data)</description>
-    <group>unifi,protect,smartdetect,tamper,alert,</group>
+    <group>unifi,protect,smartdetect,tamper,alert,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Protect: Smart audio detection (CEF 2161 smartAudioDetect) - alarms, glass break, etc. -->
@@ -104,7 +104,7 @@
     <if_sid>100312</if_sid>
     <match>deviceDisconnected</match>
     <description>UniFi Protect: Device disconnected (camera/sensor offline)</description>
-    <group>unifi,protect,device,disconnection,</group>
+    <group>unifi,protect,device,disconnection,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Protect: Device connected (CEF 2103) -->
@@ -126,7 +126,7 @@
     <if_sid>100320</if_sid>
     <match>no address range available</match>
     <description>UniFi: DHCP pool exhaustion</description>
-    <group>unifi,dhcp,exhaustion,</group>
+    <group>unifi,dhcp,exhaustion,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Suppress noise -->
@@ -170,7 +170,7 @@
     <mitre>
       <id>T1078</id>
     </mitre>
-    <group>unifi,admin,access,authentication,</group>
+    <group>unifi,admin,access,authentication,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Network CEF catch-all (base for children) -->
@@ -199,21 +199,21 @@
     <if_sid>100344</if_sid>
     <match>Device Updated</match>
     <description>UniFi: Device firmware updated</description>
-    <group>unifi,device,update,</group>
+    <group>unifi,device,update,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- UPS Battery Power In Use - CRITICAL -->
   <rule id="100348" level="10">
     <decoded_as>unifi-ups-battery-parent</decoded_as>
     <description>UniFi: UPS on battery power ($(data)) - $(extra_data) [$(srcip)]</description>
-    <group>unifi,ups,power,alert,</group>
+    <group>unifi,ups,power,alert,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- UPS AC Power Restored -->
   <rule id="100349" level="5">
     <decoded_as>unifi-ups-restored-parent</decoded_as>
     <description>UniFi: UPS AC power restored - $(extra_data) [$(srcip)]</description>
-    <group>unifi,ups,power,</group>
+    <group>unifi,ups,power,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- System (suppress) -->
@@ -230,7 +230,7 @@
     <mitre>
       <id>T1078</id>
     </mitre>
-    <group>unifi,admin,access,audit,</group>
+    <group>unifi,admin,access,audit,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Config Created (audit) -->
@@ -241,7 +241,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>unifi,config,audit,</group>
+    <group>unifi,config,audit,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Config Removed (audit) -->
@@ -252,7 +252,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>unifi,config,audit,</group>
+    <group>unifi,config,audit,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Network/Software Updated -->
@@ -260,7 +260,7 @@
     <if_sid>100344</if_sid>
     <match>Network Updated</match>
     <description>UniFi Network: Software updated - $(action)</description>
-    <group>unifi,software,update,</group>
+    <group>unifi,software,update,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Poor AP Link Speed (infra alert) -->
@@ -268,7 +268,7 @@
     <if_sid>100344</if_sid>
     <match>Poor AP Link Speed</match>
     <description>UniFi Network: Poor AP link speed detected</description>
-    <group>unifi,network,infrastructure,alert,</group>
+    <group>unifi,network,infrastructure,alert,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Config Modified (audit) - CEF ID 546 -->
@@ -278,7 +278,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>unifi,config,audit,</group>
+    <group>unifi,config,audit,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- Security-relevant setting change (IDS/IPS country filter, firewall, threat mgmt) -->
@@ -289,7 +289,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>unifi,config,audit,security,</group>
+    <group>unifi,config,audit,security,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
   <!-- IDS/IPS threat detected and blocked (CEF 201) -->
@@ -299,7 +299,7 @@
     <mitre>
       <id>T1071</id>
     </mitre>
-    <group>unifi,ids,threat,</group>
+    <group>unifi,ids,threat,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100359" level="10">
@@ -309,7 +309,7 @@
     <mitre>
       <id>T1071</id>
     </mitre>
-    <group>unifi,ids,threat,alert,</group>
+    <group>unifi,ids,threat,alert,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- AP mesh topology (CEF 575 / 576) -->
@@ -322,7 +322,7 @@
   <rule id="100382" level="5">
     <decoded_as>unifi-ap-stopmesh-parent</decoded_as>
     <description>UniFi: AP $(ap_name) lost its mesh uplink (was via $(mesh_parent))</description>
-    <group>unifi,mesh,</group>
+    <group>unifi,mesh,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Outbound IDS/IPS threat (internal client reached a flagged destination) -->
@@ -332,7 +332,7 @@
     <mitre>
       <id>T1071</id>
     </mitre>
-    <group>unifi,ids,threat,</group>
+    <group>unifi,ids,threat,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100384" level="10">
@@ -342,7 +342,7 @@
     <mitre>
       <id>T1071</id>
     </mitre>
-    <group>unifi,ids,threat,alert,</group>
+    <group>unifi,ids,threat,alert,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- ================================ -->
@@ -364,7 +364,7 @@
     <mitre>
       <id>T1078</id>
     </mitre>
-    <group>unifi,os,admin,audit,</group>
+    <group>unifi,os,admin,audit,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- UniFi OS: Application update available -->
@@ -380,7 +380,7 @@
     <if_sid>100360</if_sid>
     <match>Application Updated</match>
     <description>UniFi OS: Application updated - $(action)</description>
-    <group>unifi,os,update,audit,</group>
+    <group>unifi,os,update,audit,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
   </rule>
 
 </group>

@@ -37,7 +37,7 @@
   <rule id="100804" level="4">
     <decoded_as>mikrotik-iface-link</decoded_as>
     <description>MikroTik: link $(iface) $(status)</description>
-    <group>mikrotik,link,</group>
+    <group>mikrotik,link,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100805" level="3">
@@ -51,7 +51,7 @@
     <if_matched_sid>100804</if_matched_sid>
     <same_field>iface</same_field>
     <description>MikroTik: link $(iface) unstable (6+ transitions in 5 min) — flapping</description>
-    <group>mikrotik,link,flapping,</group>
+    <group>mikrotik,link,flapping,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
 </group>

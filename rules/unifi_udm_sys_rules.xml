@@ -20,14 +20,14 @@
     <if_sid>100700</if_sid>
     <status>File checksum failed</status>
     <description>UDM IPS: update of list $(ips.file) failed (bad checksum)</description>
-    <group>unifi,udm_sys,ips,update_failure,</group>
+    <group>unifi,udm_sys,ips,update_failure,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.8,</group>
   </rule>
 
   <rule id="100702" level="10" frequency="4" timeframe="21600">
     <if_matched_sid>100701</if_matched_sid>
     <same_field>ips.file</same_field>
     <description>UDM IPS: repeated update failures for $(ips.file) (4+ in 6h) — the list is no longer updating</description>
-    <group>unifi,udm_sys,ips,update_failure,</group>
+    <group>unifi,udm_sys,ips,update_failure,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.8,</group>
   </rule>
 
   <!-- Privilege escalation: every sudo command is traced -->
@@ -35,7 +35,7 @@
     <if_sid>100700</if_sid>
     <field name="command" type="pcre2">.+</field>
     <description>UDM sudo: $(srcuser) as $(dstuser): $(command)</description>
-    <group>unifi,udm_sys,sudo,privilege_escalation,</group>
+    <group>unifi,udm_sys,sudo,privilege_escalation,pci_dss_10.2.2,pci_dss_10.2.5,gpg13_7.6,gpg13_7.8,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.6,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Memory pressure: earlyoom is telemetry (level 1), alert below 10% -->
@@ -50,7 +50,7 @@
     <if_sid>100704</if_sid>
     <field name="mem.avail_pct" type="pcre2">^\d\.</field>
     <description>UDM earlyoom: available memory below 10% ($(mem.avail_pct)%) — controller at risk of OOM kills</description>
-    <group>unifi,udm_sys,memory,low_resources,</group>
+    <group>unifi,udm_sys,memory,low_resources,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- systemd: unit failure -->
@@ -58,7 +58,7 @@
     <if_sid>100700</if_sid>
     <status>^Failed</status>
     <description>UDM systemd: unit $(systemd.unit) failed</description>
-    <group>unifi,udm_sys,systemd,service_failure,</group>
+    <group>unifi,udm_sys,systemd,service_failure,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- systemd: normal unit lifecycle = noise, traced without alerting -->

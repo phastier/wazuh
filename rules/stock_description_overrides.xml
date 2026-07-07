@@ -1,0 +1,93 @@
+<!--
+  Description-only overrides of stock rules: surface the decoded user (and
+  source IP where available) directly in the alert description, so the alert
+  list is readable without opening each event.
+  Conditions, levels, MITRE ids and rule groups are copied VERBATIM from the
+  stock ruleset (0085-pam_rules.xml, 0095-sshd_rules.xml,
+  0495-proxmox-ve_rules.xml) — only <description> changes. The <group name>
+  sections mirror each stock file's group header. Review after Wazuh
+  upgrades in case upstream conditions move.
+  PVE note: user extraction for non-@pam/@pve realms (authentik OIDC)
+  requires decoders/pve_extra.xml.
+  Astier Consulting - Jul 2026
+-->
+
+<group name="pam,syslog,">
+
+  <rule id="5501" level="3" overwrite="yes">
+    <if_sid>5500</if_sid>
+    <match>session opened for user </match>
+    <description>PAM: Login session opened for user $(dstuser).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>authentication_success,pci_dss_10.2.5,gpg13_7.8,gpg13_7.9,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="5502" level="3" overwrite="yes">
+    <if_sid>5500</if_sid>
+    <match>session closed for user </match>
+    <description>PAM: Login session closed for user $(dstuser).</description>
+    <group>pci_dss_10.2.5,gpg13_7.8,gpg13_7.9,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
+
+<group name="syslog,sshd,">
+
+  <rule id="5715" level="3" overwrite="yes">
+    <if_sid>5700</if_sid>
+    <match>^Accepted|authenticated.$</match>
+    <description>sshd: authentication success — user $(dstuser) from $(srcip).</description>
+    <mitre>
+      <id>T1078</id>
+      <id>T1021</id>
+    </mitre>
+    <group>authentication_success,gdpr_IV_32.2,gpg13_7.1,gpg13_7.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,pci_dss_10.2.5,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
+
+<group name="syslog,sudo,">
+
+  <rule id="5402" level="3" overwrite="yes">
+    <if_sid>5400</if_sid>
+    <regex> ; USER=root ; COMMAND=| ; USER=root ; TSID=\S+ ; COMMAND=</regex>
+    <description>Successful sudo to ROOT executed by $(srcuser).</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+    <group>pci_dss_10.2.5,pci_dss_10.2.2,gpg13_7.6,gpg13_7.8,gpg13_7.13,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_AC.6,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="5403" level="4" overwrite="yes">
+    <if_sid>5400</if_sid>
+    <if_fts />
+    <description>First time user $(srcuser) executed sudo.</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+</group>
+
+<group name="syslog,proxmox-ve,">
+
+  <rule id="87201" level="6" overwrite="yes">
+    <if_sid>87200</if_sid>
+    <match>authentication failure; </match>
+    <description>Proxmox VE: authentication FAILED for user $(dstuser) from $(srcip).</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="87203" level="3" overwrite="yes">
+    <if_sid>87200</if_sid>
+    <match> successful auth for user </match>
+    <description>Proxmox VE: successful auth for user $(dstuser).</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>authentication_success,pci_dss_10.2.5,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
