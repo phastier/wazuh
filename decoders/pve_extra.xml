@@ -1,0 +1,44 @@
+<!--
+  Proxmox VE decoders — full replacement of the stock file
+  0440-proxmox-ve_decoders.xml, which MUST be excluded in ossec.conf:
+      <decoder_exclude>0440-proxmox-ve_decoders.xml</decoder_exclude>
+  Why: the stock pvedaemon auth decoders only extract the user for the
+  @pam and @pve realms; logins through custom realms (here: the authentik
+  OIDC realm) left dstuser/srcip empty. A sibling decoder cannot fix it:
+  the first child whose prematch matches wins even when its regex then
+  fails, so the stock children shadow any custom sibling. These children
+  match ANY realm and keep the full principal (user@realm), which is what
+  an audit trail needs.
+  Parent decoder names are kept identical to stock (pvedaemon, pvestatd,
+  pveproxy, pvepw-logger) so stock rules 87200+ keep matching.
+-->
+
+<decoder name="pvedaemon">
+  <program_name>^pvedaemon</program_name>
+</decoder>
+
+<decoder name="pvestatd">
+  <program_name>^pvestatd</program_name>
+</decoder>
+
+<decoder name="pveproxy">
+  <program_name>^pveproxy</program_name>
+</decoder>
+
+<decoder name="pvepw-logger">
+  <program_name>^pvepw-logger</program_name>
+</decoder>
+
+<decoder name="pvedaemon-auth-failed">
+  <parent>pvedaemon</parent>
+  <prematch>authentication failure; </prematch>
+  <regex offset="after_prematch" type="pcre2">^rhost=(\S+) user=(\S+) msg=</regex>
+  <order>srcip, user</order>
+</decoder>
+
+<decoder name="pvedaemon-auth-success">
+  <parent>pvedaemon</parent>
+  <prematch>successful auth for user '</prematch>
+  <regex offset="after_prematch" type="pcre2">^([^']+)'</regex>
+  <order>user</order>
+</decoder>

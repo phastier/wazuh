@@ -87,6 +87,8 @@ Decoders and rules for common programs collected by Wazuh agents through journal
 - **qemu-ga**: guest fsfreeze/fsthaw calls during backups
 - **LibreNMS service**: component/level/message extraction — polling INFO reclassified to level 1, ERROR/CRITICAL/WARNING at level 5
 - Program-only decoders for chronyd, snapd, dbus-daemon, pmxcfs, corosync, canonical-livepatch, fwupd, smokeping, opensearch-dashboards, proxmox-backup-proxy, and more — every journald event ends up decoded and traceable
+- **Proxmox VE auth for ANY realm** (`pve_extra.xml`): the stock decoder only extracts the user for the `@pam`/`@pve` realms, so logins through custom realms (OIDC/SSO — e.g. an authentik realm) are not decoded at all. This full replacement (stock `0440` must be excluded — see [learning #25](#key-technical-learnings)) matches every realm and keeps the **full principal** (`user@realm`) in `dstuser`, which is what an audit trail needs
+- **Readable stock descriptions** (`stock_description_overrides.xml`): description-only `overwrite="yes"` of PAM 5501/5502, sshd 5715, sudo 5402/5403 and Proxmox VE 87201/87203 — the alert list shows *which user* (and source IP where available) without opening each event; conditions, levels, MITRE and groups stay verbatim from stock
 
 ### Web access log — scanner detection
 Malformed nginx/Apache access-log entries that the stock `web-accesslog` decoder ignores (`web_accesslog_malformed.xml`): empty requests (`"" 400`) and binary payloads (TLS handshakes sent to a plaintext port). These are exactly what Internet scanners generate against public endpoints. Each probe alerts at level 5 with `srcip` extracted; 6+ probes from the same source in 5 minutes escalate to level 8.
@@ -177,6 +179,8 @@ These are hard-won lessons from building these integrations:
 
 24. **Wazuh `<field>` matching is substring, not exact — anchor it** — `<field name="logtype">auth</field>` also matches `authstat` (and `vpn` matches `xvpn`), so the wrong rule fires and the specific one never runs. Anchor every discriminating field match: `<field name="logtype" type="pcre2">^auth$</field>`. Same trap as prematches (learning #7), one layer up in the rules.
 
+25. **The first matching prematch wins even if its regex then fails — a sibling decoder can never fix a stock decoder** — when several children share a parent, analysisd picks the first child whose `<prematch>` matches and stops there; if that child's `<regex>` then extracts nothing, the event stays undecoded and your sibling with the better regex is never tried. To fix a stock child decoder you must `<decoder_exclude>` the whole stock file in `ossec.conf` and ship a full replacement (keeping the stock parent decoder names so stock rules keep matching) — that is exactly what `pve_extra.xml` does for Proxmox VE non-`@pam`/`@pve` realms.
+
 
 ## Installation
 
@@ -192,6 +196,7 @@ cp decoders/unifi_mca.xml /var/ossec/etc/decoders/             # USW-Flex 2.5G +
 cp decoders/journald_extra.xml /var/ossec/etc/decoders/        # zed, pvescheduler, CRON, qemu-ga, LibreNMS...
 cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner probes on public endpoints
 cp decoders/authentik.xml /var/ossec/etc/decoders/             # Authentik IdP (structlog JSON via journald)
+cp decoders/pve_extra.xml /var/ossec/etc/decoders/             # Proxmox VE auth, any realm (requires excluding stock 0440 - step 4)
 # Only if you have a Stormshield SNS firewall:
 cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
@@ -211,6 +216,7 @@ cp rules/journald_extra_rules.xml /var/ossec/etc/rules/        # zed, pveschedul
 cp rules/web_malformed_rules.xml /var/ossec/etc/rules/         # scanner detection (100820-100821)
 cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS (100900-100919)
 cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (101000-101042)
+cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -227,6 +233,9 @@ chmod 660 /var/ossec/etc/decoders/*.xml /var/ossec/etc/rules/*.xml
 Add to `/var/ossec/etc/ossec.conf` inside `<ruleset>`:
 ```xml
 <rule_exclude>0999-bnc-unifi-rules.xml</rule_exclude>
+<!-- Required for pve_extra.xml (see learning #25): the stock PVE decoder
+     only extracts users for the @pam/@pve realms and shadows any sibling. -->
+<decoder_exclude>0440-proxmox-ve_decoders.xml</decoder_exclude>
 <!-- Required for UniFi AP hostapd events (see learning #15): the built-in
      symantec-av decoder false-matches the "<12-hex>," AP syslog prefix. -->
 <decoder_exclude>0330-symantec_decoders.xml</decoder_exclude>
