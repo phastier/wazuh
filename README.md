@@ -758,7 +758,7 @@ Two tools ship in `tools/`:
 - [x] Community decoder-request workflow — submit anonymised logs via a GitHub issue template ([`CONTRIBUTING.md`](CONTRIBUTING.md))
 - [x] Authentik IdP — structlog JSON via the Docker journald driver; audit trail with compliance tagging, brute-force + scanner correlations (rules 101000-101042)
 - [ ] macOS Content Caching (Caching Service / AssetCache) monitoring — activity, cache efficiency and client-serving events from the built-in Caching Service, targeting the surface exposed from macOS 27; on hold until Apple's documentation settles
-- [ ] CoreFilter ([corefilter.app](https://corefilter.app)) log integration — decode the filter's logs into per-flow/per-verdict events; log surface still to be surveyed
+- [ ] CoreFilter ([corefilter.app](https://corefilter.app), by Octiplex) log integration — per-application firewall for macOS built on the native Network Extension / Endpoint Security frameworks, with identity-bound policies (Entra ID / Okta) and real-time audit; decode its audit/flow logs into per-app, per-user verdict events once it ships (launching Q2 2026)
 - [ ] Propose the UniFi and Stormshield decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
