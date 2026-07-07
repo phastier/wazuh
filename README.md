@@ -757,6 +757,8 @@ Two tools ship in `tools/`:
 - [x] Generic, format-agnostic log anonymiser for any platform (`tools/log-anonymize.py`) — IPv4/IPv6/MAC/e-mail/DN scrubbing, `--redact-key`, `--scrub-fqdn`, deny-file
 - [x] Community decoder-request workflow — submit anonymised logs via a GitHub issue template ([`CONTRIBUTING.md`](CONTRIBUTING.md))
 - [x] Authentik IdP — structlog JSON via the Docker journald driver; audit trail with compliance tagging, brute-force + scanner correlations (rules 101000-101042)
+- [ ] macOS Content Caching (Caching Service / AssetCache) monitoring — activity, cache efficiency and client-serving events from the built-in Caching Service, targeting the surface exposed from macOS 27; on hold until Apple's documentation settles
+- [ ] CoreFilter ([corefilter.app](https://corefilter.app)) log integration — decode the filter's logs into per-flow/per-verdict events; log surface still to be surveyed
 - [ ] Propose the UniFi and Stormshield decoders upstream (Wazuh ruleset repository)
 - [ ] Dashboard templates for OpenSearch/Kibana
 
