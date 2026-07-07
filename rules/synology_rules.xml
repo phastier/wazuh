@@ -1,0 +1,93 @@
+<!--
+  Rules for the Synology DSM decoders (Log Center syslog forwarding).
+  See decoders/synology.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100950-100969
+  Philosophy: connection actions (sign-in, share access) are visible (L3+),
+  the SMB transfer log is drill-down telemetry (L1) with a mass-deletion
+  correlation on top — Time Machine / clone jobs generate huge legitimate
+  file-op volumes, so per-file alerts would be pure noise.
+-->
+<group name="synology,nas,">
+
+  <!-- Connection events (sign-in, share access) -->
+  <rule id="100950" level="3">
+    <decoded_as>synology-connection</decoded_as>
+    <description>Synology DSM: connection event</description>
+    <group>synology,authentication,</group>
+  </rule>
+
+  <rule id="100951" level="3">
+    <if_sid>100950</if_sid>
+    <field name="synology.method" type="pcre2">.+</field>
+    <match> signed in to </match>
+    <description>Synology: successful sign-in of $(dstuser) to $(synology.service) from $(srcip) via $(synology.method)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>synology,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="100952" level="5">
+    <if_sid>100950</if_sid>
+    <match> failed to sign in </match>
+    <description>Synology: FAILED sign-in of $(dstuser) to $(synology.service) from $(srcip) via $(synology.method)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>synology,authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="100953" level="10" frequency="6" timeframe="120">
+    <if_matched_sid>100952</if_matched_sid>
+    <same_srcip />
+    <description>Synology: possible brute force from $(srcip) (6+ failed sign-ins in 2 min)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>synology,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gpg13_7.1,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="100954" level="3">
+    <if_sid>100950</if_sid>
+    <match> accessed shared folder </match>
+    <description>Synology: $(dstuser) accessed share [$(synology.share)] via $(synology.protocol) from $(srcip)</description>
+    <group>synology,smb,share_access,pci_dss_10.2.1,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- SMB transfer log: per-file telemetry, traced without alerting
+       (Time Machine / clone jobs move thousands of files legitimately) -->
+  <rule id="100957" level="1">
+    <decoded_as>synology-winfile</decoded_as>
+    <description>Synology file op: $(synology.op) $(synology.path) by $(dstuser)</description>
+    <group>synology,smb,file_op,</group>
+  </rule>
+
+  <!-- Mass deletion from one source: ransomware or destructive cleanup on
+       the NAS. Backup thinning (Time Machine) can trip this — tune the
+       threshold or exclude the backup user if it proves noisy. -->
+  <rule id="100958" level="1">
+    <if_sid>100957</if_sid>
+    <field name="synology.op" type="pcre2">^delete$</field>
+    <description>Synology file op: DELETE $(synology.path) by $(dstuser)</description>
+    <group>synology,smb,file_op,delete,</group>
+  </rule>
+
+  <rule id="100959" level="10" frequency="100" timeframe="60">
+    <if_matched_sid>100958</if_matched_sid>
+    <same_srcip />
+    <description>Synology: MASS DELETION on NAS by $(dstuser) from $(srcip) (100+ deletes in 1 min) — ransomware or destructive job?</description>
+    <mitre>
+      <id>T1485</id>
+    </mitre>
+    <group>synology,smb,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- DSM system messages (incl. Log Center syslog test) -->
+  <rule id="100956" level="3">
+    <decoded_as>synology-system</decoded_as>
+    <description>Synology DSM: system message</description>
+    <group>synology,system,</group>
+  </rule>
+
+</group>

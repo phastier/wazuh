@@ -133,12 +133,21 @@ Per-container resource and health monitoring through two agent **command localfi
 - **Health** (`docker ps`): image, uptime and health status per container — **`unhealthy` escalates to level 12**
 - Pairs naturally with the [Authentik section](#authentik-idp-goauthentik) (or any compose stack): the containers' *stdout* goes through the journald driver, their *resource envelope* through these commands
 
+### Synology DSM (NAS)
+Decoders and rules for DSM 7.x **Log Center syslog forwarding** (BSD format) — no agent on the NAS:
+
+- **Authentication**: sign-in success (level 3, with user, source IP and method — password/SSO), **failed sign-in (level 5)** with **brute-force correlation** (6+ failures from the same IP in 2 min → level 10)
+- **Share access**: who mounted/accessed which shared folder, from which host, over which protocol (CIFS/SMB3, AFP...) — level 3
+- **SMB transfer log** (`WinFileService`): per-file operations decoded as level-1 telemetry (Time Machine and clone jobs legitimately move thousands of files — per-file alerts would be pure noise), topped by a **mass-deletion correlation** (100+ deletes from one source in 1 min → level 10, MITRE T1485) — a ransomware/destructive-job tripwire on the NAS
+- **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1485 (Data Destruction)
+
 ## Architecture
 ```
 MikroTik router (RouterOS) ──┐
 UniFi Network controller ────┤
 Fortinet FortiGate ──────────┼──► Syslog UDP/514 ──► Wazuh Server (rsyslog → analysisd)
-Stormshield SNS ─────────────┘
+Stormshield SNS ─────────────┤
+Synology DSM (Log Center) ───┘
 ```
 
 MikroTik and UniFi send **BSD syslog**; FortiGate and Stormshield SNS send their native **`key=value` syslog**. Wazuh's pre-decoder extracts timestamp and hostname before the custom decoders process the message payload. **Jamf Pro, Authentik and Linux/Proxmox hosts are collected by the Wazuh agent** (`<localfile>` / journald), not syslog.
@@ -216,6 +225,7 @@ cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner prob
 cp decoders/authentik.xml /var/ossec/etc/decoders/             # Authentik IdP (structlog JSON via journald)
 cp decoders/pve_extra.xml /var/ossec/etc/decoders/             # Proxmox VE auth, any realm (requires excluding stock 0440 - step 4)
 cp decoders/docker_decoders.xml /var/ossec/etc/decoders/       # Docker container resources/health (agent command localfiles)
+cp decoders/synology.xml /var/ossec/etc/decoders/              # Synology DSM (Log Center syslog: auth, share access, SMB transfer log)
 # Only if you have a Stormshield SNS firewall:
 cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
@@ -237,6 +247,7 @@ cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS
 cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (101000-101042)
 cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
 cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
+cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM (100950-100959)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -383,6 +394,21 @@ On the Docker host's agent (or centrally via a shared group `agent.conf`, as sho
 
 Remote commands pushed from the manager require `logcollector.remote_commands=1` in the agent's `local_internal_options.conf`.
 
+### Synology DSM (Log Center)
+In DSM: **Log Center → Log Sending** — enable sending to a syslog server: your Wazuh manager, port `514`, **UDP**, format **BSD (RFC 3164)** (the decoders are built against the BSD shape; Wazuh's remoted does not terminate TLS). For the per-file SMB transfer log, also enable **Control Panel → File Services → SMB → Advanced → Transfer log**.
+
+If your manager listens on IPv6, the syslog `<remote>` block needs `<ipv6>yes</ipv6>` alongside the v6 `allowed-ips`, or remoted fails to bind (CRITICAL 1206):
+```xml
+<remote>
+  <connection>syslog</connection>
+  <port>514</port>
+  <protocol>udp</protocol>
+  <ipv6>yes</ipv6>
+  <allowed-ips>2001:db8:aaaa::/64</allowed-ips>
+  <local_ip>2001:db8:aaaa::69</local_ip>
+</remote>
+```
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -433,6 +459,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
+| 100950-100959 | Synology | DSM sign-in L3 / failed L5 + brute force L10, share access L3, SMB file ops L1 + mass-deletion (ransomware tripwire) L10 |
 | 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |
 | 101010-101022 | Authentik | Audit trail (login/logout L3, failed login L5 + brute force L10, app authorization L3, account/credential change L5, config change L5, impersonation L8, suspicious request L8, exceptions L6) |
 | 101030-101034 | Authentik | HTTP access (all decoded L0, 401/403 L5, 404 L3 + scanner correlation L8, 5xx L5) |

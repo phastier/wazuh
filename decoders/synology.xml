@@ -1,0 +1,51 @@
+<!--
+  Synology DSM 7.x decoders — Log Center syslog forwarding (BSD format).
+  Three shapes reach the manager:
+    - "Connection: User [u] from [ip|HOST(ip)] ..." -> program_name=Connection
+      (sign-in success/failure, shared-folder access)
+    - "WinFileService Event: <op>, Path: ..., User: u, IP: ip" (SMB transfer
+      log; enable it under Control Panel > File Services > SMB > Advanced)
+    - "System <message>" (system events, syslog test)
+  NB: character classes are explicit (no [^\]]+) — see README learning #2.
+-->
+
+<decoder name="synology-connection">
+  <program_name>^Connection$</program_name>
+</decoder>
+
+<decoder name="synology-signin-ok">
+  <parent>synology-connection</parent>
+  <prematch> signed in to </prematch>
+  <regex type="pcre2">^User \[([\w\.\-@]+)\] from \[([a-fA-F0-9:\.]+)\] signed in to \[(\w+)\] successfully via \[([\w\-]+)\]</regex>
+  <order>dstuser, srcip, synology.service, synology.method</order>
+</decoder>
+
+<decoder name="synology-signin-fail">
+  <parent>synology-connection</parent>
+  <prematch> failed to sign in </prematch>
+  <regex type="pcre2">^User \[([\w\.\-@]+)\] from \[([a-fA-F0-9:\.]+)\] failed to sign in to \[(\w+)\] via \[([\w\-]+)\]</regex>
+  <order>dstuser, srcip, synology.service, synology.method</order>
+</decoder>
+
+<decoder name="synology-share-access">
+  <parent>synology-connection</parent>
+  <prematch> accessed shared folder </prematch>
+  <regex type="pcre2">^User \[([\w\.\-@]+)\] from \[([\w\.\-\(\):]+)\] via \[([\w\(\)\.]+)\] accessed shared folder \[([\w\.\-\ ]+)\]</regex>
+  <order>dstuser, srcip, synology.protocol, synology.share</order>
+</decoder>
+
+<!-- SMB transfer log: no syslog tag, the message starts with the service name -->
+<decoder name="synology-winfile">
+  <prematch type="pcre2">^WinFileService Event: </prematch>
+</decoder>
+
+<decoder name="synology-winfile-fields">
+  <parent>synology-winfile</parent>
+  <regex type="pcre2">^WinFileService Event: (\w+), Path: (\S+), File/Folder: (\w+), Size: .+, User: ([\w\.\-@]+), IP: ([a-fA-F0-9:\.]+)</regex>
+  <order>synology.op, synology.path, synology.objtype, dstuser, srcip</order>
+</decoder>
+
+<!-- DSM system messages (incl. the Log Center syslog test) -->
+<decoder name="synology-system">
+  <prematch type="pcre2">^System </prematch>
+</decoder>
