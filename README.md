@@ -399,7 +399,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100200-100211 | MikroTik | Firewall (DROP, invalid, scan detection) |
 | 100220-100223 | MikroTik | Authentication (login, brute force) |
 | 100230-100233 | MikroTik | DHCP operations |
-| 100240 | MikroTik | System catch-all |
+| 100240-100243 | MikroTik | System (catch-all L3; netwatch probes L1; RouterOS upgrade trail: package installed L5, router rebooted — incl. power-loss "without proper shutdown" — L8) |
 | 100300-100302 | UniFi | Firewall (base, DROP, Allow suppressed) |
 | 100310-100316 | UniFi | Protect (smart detect, camera/sensor motion, door sensor, admin activity, intrusion correlation) |
 | 100320-100321 | UniFi | DHCP (events, pool exhaustion) |

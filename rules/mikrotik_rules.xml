@@ -136,4 +136,34 @@
     <group>mikrotik,system,</group>
   </rule>
 
+  <!-- Netwatch probe scripts (ping / ping done): telemetry, traced without
+       alerting — they otherwise drown the system events they share a rule
+       with -->
+  <rule id="100241" level="1">
+    <if_sid>100240</if_sid>
+    <match>^ping</match>
+    <description>MikroTik: netwatch probe</description>
+    <group>mikrotik,system,netwatch,</group>
+  </rule>
+
+  <!-- RouterOS package installed (upgrade trail). RouterOS buffers boot-time
+       messages and delivers them once links are back up. -->
+  <rule id="100242" level="5">
+    <if_sid>100240</if_sid>
+    <match>^installed |^upgraded </match>
+    <description>MikroTik: RouterOS package installed (upgrade)</description>
+    <group>mikrotik,system,upgrade,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
+  </rule>
+
+  <!-- Router reboot: the raw log carries who/why
+       (e.g. "router rebooted by tcp-msg(winbox):admin@host/upgrade") -->
+  <!-- Covers "router rebooted by <actor>/<reason>" AND "router was rebooted
+       without proper shutdown" (power loss / crash) -->
+  <rule id="100243" level="8">
+    <if_sid>100240</if_sid>
+    <match>rebooted</match>
+    <description>MikroTik: ROUTER REBOOTED (actor/reason in the raw log)</description>
+    <group>mikrotik,system,reboot,config_changed,service_availability,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_A1.2,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
+  </rule>
+
 </group>

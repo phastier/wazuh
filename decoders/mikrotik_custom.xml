@@ -85,9 +85,13 @@
   <order>dstip, extra_data, dstuser</order>
 </decoder>
 
-<!-- SYSTEM: catch-all for other MikroTik messages (ping, test, Class-Id, etc.) -->
+<!-- SYSTEM: catch-all for other MikroTik messages — netwatch probes (ping,
+     test), DHCP Class-Id, and the upgrade/reboot trail ("installed
+     system-X.Y.Z", "router rebooted by <actor>/<reason>", "router was
+     rebooted without proper shutdown" = power loss). These boot-time
+     messages are buffered by RouterOS and delivered once links are up. -->
 <decoder name="mikrotik-system-parent">
-  <prematch type="pcre2">^(?:ping |test |Class-Id )</prematch>
+  <prematch type="pcre2">^(?:ping |test |Class-Id |installed |upgraded |router )</prematch>
 </decoder>
 <decoder name="mikrotik-system">
   <parent>mikrotik-system-parent</parent>
