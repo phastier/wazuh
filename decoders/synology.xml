@@ -41,7 +41,9 @@
 
 <decoder name="synology-winfile-fields">
   <parent>synology-winfile</parent>
-  <regex type="pcre2">^WinFileService Event: (\w+), Path: (\S+), File/Folder: (\w+), Size: .+, User: ([\w\.\-@]+), IP: ([a-fA-F0-9:\.]+)</regex>
+  <!-- Path is non-greedy up to ", File/Folder:": covers spaces in paths and
+       the rename shape "Path: /old -> /new" -->
+  <regex type="pcre2">^WinFileService Event: (\w+), Path: (.+?), File/Folder: (\w+), Size: .+, User: ([\w\.\-@]+), IP: ([a-fA-F0-9:\.]+)</regex>
   <order>synology.op, synology.path, synology.objtype, dstuser, srcip</order>
 </decoder>
 
