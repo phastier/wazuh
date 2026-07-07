@@ -50,8 +50,9 @@
   <!-- SYSTEM EVENTS        -->
   <!-- ==================== -->
 
-  <!-- Performance stats (81602/81603: notice-level events land on 81603) -->
-  <rule id="100420" level="3">
+  <!-- Performance stats (81602/81603: notice-level events land on 81603):
+       pure telemetry, traced without alerting -->
+  <rule id="100420" level="1">
     <if_sid>81602,81603</if_sid>
     <match>action="perf-stats"</match>
     <description>Fortigate: Performance stats</description>
@@ -66,12 +67,29 @@
     <group>fortigate,system,disk,pci_dss_10.5.2,gdpr_IV_35.7.d,</group>
   </rule>
 
-  <!-- FortiSandbox AV update -->
-  <rule id="100422" level="3">
+  <!-- FortiSandbox AV signature refresh: automatic hygiene running hundreds
+       of times a day — traced without alerting; the signal is its FAILURE -->
+  <rule id="100422" level="1">
     <if_sid>81602,81603</if_sid>
     <match>FortiSandbox AV database updated</match>
     <description>Fortigate: AV database updated</description>
     <group>fortigate,system,update,</group>
+  </rule>
+
+  <!-- FortiGuard package update completed: an update action, kept visible -->
+  <rule id="100423" level="3">
+    <if_sid>81602,81603</if_sid>
+    <match>logdesc="FortiGate update succeeded"</match>
+    <description>Fortigate: FortiGuard update succeeded</description>
+    <group>fortigate,system,update,config_changed,pci_dss_10.2.7,pci_dss_10.6.1,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,tsc_CC8.1,</group>
+  </rule>
+
+  <!-- Update failures: signatures/engine going stale on the edge firewall -->
+  <rule id="100424" level="5">
+    <if_sid>81602,81603</if_sid>
+    <regex type="pcre2">logdesc="FortiGate update failed"|action="update".*status="fail</regex>
+    <description>Fortigate: FortiGuard update FAILED</description>
+    <group>fortigate,system,update_failure,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.8,</group>
   </rule>
 
   <!-- ==================== -->

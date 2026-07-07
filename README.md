@@ -416,7 +416,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100383-100384 | UniFi | IDS/IPS outbound threat (internal client reached a flagged destination; high-risk escalated) |
 | 100400-100401 | FortiGate | Noise suppression (mDNS, UniFi discovery) |
 | 100410-100411 | FortiGate | VPN IPsec (denied traffic, VPN events) |
-| 100420-100422 | FortiGate | System (perf stats, disk rotation, AV updates) |
+| 100420-100424 | FortiGate | System (perf stats L1, disk rotation L4, AV signature refresh L1, FortiGuard update succeeded L3 / FAILED L5) |
 | 100430 | FortiGate | Correlation (repeated VPN denies) |
 | 100440-100445 | FortiGate | IPsec tunnel state (tunnel down L8, up L3, phase-2 L5/L3, flapping L10, stats/negotiation traced L1) |
 | 100446-100447 | FortiGate | Edge local-in deny from WAN (telemetry L1, `srcintfrole="wan"` — no site-specific prefix list) + same-source probe campaign L8 |
