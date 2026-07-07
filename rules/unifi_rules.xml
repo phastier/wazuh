@@ -129,6 +129,41 @@
     <group>unifi,dhcp,exhaustion,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
+  <!-- "no address range" on an interface where another server legitimately
+       owns DHCP (here the edge router serves the LAN on br0): expected —
+       dnsmasq just hears the broadcasts. NOT a pool exhaustion. Adjust the
+       interface to your topology. -->
+  <rule id="100325" level="1">
+    <if_sid>100321</if_sid>
+    <match>via br0</match>
+    <description>UniFi: DHCP request heard on br0 (served by the edge router) — expected</description>
+    <group>unifi,dhcp,</group>
+  </rule>
+
+  <!-- DHCPACK = who-is-connected: IP<->MAC<->hostname asset inventory -->
+  <rule id="100322" level="3">
+    <if_sid>100320</if_sid>
+    <match>: DHCPACK(</match>
+    <description>UniFi DHCP: $(port.local.ip) leased to $(destination_mac) ($(dhcp.hostname)) on $(interface_in)</description>
+    <group>unifi,dhcp,asset_inventory,</group>
+  </rule>
+
+  <!-- DHCP negotiation chatter: traced without alerting -->
+  <rule id="100323" level="1">
+    <if_sid>100320</if_sid>
+    <match>: DHCPREQUEST(|: DHCPDISCOVER(|: DHCPOFFER(|: DHCPNAK(</match>
+    <description>UniFi DHCP: $(command) from $(destination_mac) on $(interface_in)</description>
+    <group>unifi,dhcp,</group>
+  </rule>
+
+  <!-- dnsmasq inotify lease-file reload chatter: traced without alerting -->
+  <rule id="100324" level="1">
+    <if_sid>100320</if_sid>
+    <match>inotify: </match>
+    <description>UniFi DHCP: dnsmasq lease-file reload (inotify)</description>
+    <group>unifi,dhcp,</group>
+  </rule>
+
   <!-- Suppress noise -->
   <rule id="100330" level="0">
     <decoded_as>unifi-udm-pro-services</decoded_as>

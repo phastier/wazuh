@@ -429,7 +429,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100240-100243 | MikroTik | System (catch-all L3; netwatch probes L1; RouterOS upgrade trail: package installed L5, router rebooted — incl. power-loss "without proper shutdown" — L8) |
 | 100300-100302 | UniFi | Firewall (base, DROP, Allow suppressed) |
 | 100310-100316 | UniFi | Protect (smart detect, camera/sensor motion, door sensor, admin activity, intrusion correlation) |
-| 100320-100321 | UniFi | DHCP (events, pool exhaustion) |
+| 100320-100325 | UniFi | DHCP (**DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted; negotiation + inotify chatter L1; pool exhaustion L6 with an expected-interface exception L1) |
 | 100330-100331 | UniFi | Noise suppression (services, DPI) |
 | 100340-100349 | UniFi | WiFi, Wired, Network CEF, Device Updates, UPS power |
 | 100350 | UniFi | System suppression |
