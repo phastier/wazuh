@@ -1,0 +1,87 @@
+<!--
+  Rules for the pve-task decoders (Proxmox VE task trail with actor+result).
+  See decoders/pve_tasks.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100860-100879
+  Doctrine: lifecycle/backup/snapshot COMPLETIONS are visible actions (L3,
+  with who did what to which VM/CT); failures escalate (L7/L8); task starts
+  and housekeeping (aptupdate, replication) stay L1 telemetry, archived.
+-->
+<group name="pve,proxmox,">
+
+  <!-- Bases: every task-trail line (starting / requesting / end).
+       Three anchors are needed because decoded_as matches the PARENT
+       decoder (not the pve-task child) and stock rule 87200 (level 0,
+       evaluated first) owns pvedaemon events, while 100847 owns
+       pvescheduler ones — the task rules hook under them as children. -->
+  <rule id="100860" level="1">
+    <program_name>^qm$|^pct$|^pveupdate$</program_name>
+    <field name="pve.phase" type="pcre2">.+</field>
+    <description>Proxmox task: $(pve.task) $(pve.phase) (VM/CT $(pve.vmid)) on $(pve.node)</description>
+    <group>pve,task,</group>
+  </rule>
+
+  <rule id="100866" level="1">
+    <if_sid>87200</if_sid>
+    <field name="pve.phase" type="pcre2">.+</field>
+    <description>Proxmox task: $(pve.task) $(pve.phase) (VM/CT $(pve.vmid)) on $(pve.node)</description>
+    <group>pve,task,</group>
+  </rule>
+
+  <rule id="100867" level="1">
+    <if_sid>100847</if_sid>
+    <field name="pve.phase" type="pcre2">.+</field>
+    <description>Proxmox task: $(pve.task) $(pve.phase) (VM/CT $(pve.vmid)) on $(pve.node)</description>
+    <group>pve,task,</group>
+  </rule>
+
+  <!-- Backup (vzdump) completed -->
+  <rule id="100861" level="3">
+    <if_sid>100860,100866,100867</if_sid>
+    <field name="pve.phase" type="pcre2">^end task$</field>
+    <field name="pve.task" type="pcre2">^vzdump$</field>
+    <field name="pve.result" type="pcre2">^OK$</field>
+    <description>Proxmox: backup (vzdump) of VM/CT $(pve.vmid) finished OK on $(pve.node)</description>
+    <group>pve,backup,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Backup (vzdump) FAILED -->
+  <rule id="100862" level="8">
+    <if_sid>100860,100866,100867</if_sid>
+    <field name="pve.phase" type="pcre2">^end task$</field>
+    <field name="pve.task" type="pcre2">^vzdump$</field>
+    <field name="pve.result" type="pcre2">^(?!OK$).+</field>
+    <description>Proxmox: backup (vzdump) of VM/CT $(pve.vmid) FAILED on $(pve.node): $(pve.result)</description>
+    <group>pve,backup,backup_failure,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
+  </rule>
+
+  <!-- VM/CT lifecycle completed: who did what to which guest -->
+  <rule id="100863" level="3">
+    <if_sid>100860,100866,100867</if_sid>
+    <field name="pve.phase" type="pcre2">^end task$</field>
+    <field name="pve.task" type="pcre2">^(?:qm|vz)(?:start|stop|shutdown|reboot|suspend|resume)$|^qmigrate$|^migrate$|^(?:start|stop)all$</field>
+    <field name="pve.result" type="pcre2">^OK$</field>
+    <description>Proxmox: $(pve.task) VM/CT $(pve.vmid) by $(dstuser) — OK ($(pve.node))</description>
+    <group>pve,vm_lifecycle,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- Snapshot / rollback completed -->
+  <rule id="100864" level="3">
+    <if_sid>100860,100866,100867</if_sid>
+    <field name="pve.phase" type="pcre2">^end task$</field>
+    <field name="pve.task" type="pcre2">^(?:qm|vz)(?:snapshot|delsnapshot|rollback)$</field>
+    <field name="pve.result" type="pcre2">^OK$</field>
+    <description>Proxmox: $(pve.task) on VM/CT $(pve.vmid) by $(dstuser) — OK ($(pve.node))</description>
+    <group>pve,snapshot,pci_dss_10.2.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- Any other task ending in error -->
+  <rule id="100865" level="7">
+    <if_sid>100860,100866,100867</if_sid>
+    <field name="pve.phase" type="pcre2">^end task$</field>
+    <field name="pve.result" type="pcre2">^(?!OK$).+</field>
+    <description>Proxmox: task $(pve.task) (VM/CT $(pve.vmid)) FAILED on $(pve.node): $(pve.result)</description>
+    <group>pve,task,system_error,gpg13_4.3,gdpr_IV_35.7.d,</group>
+  </rule>
+
+</group>

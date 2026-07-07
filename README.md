@@ -99,6 +99,7 @@ Decoders and rules for common programs collected by Wazuh agents through journal
 - **qemu-ga**: guest fsfreeze/fsthaw calls during backups
 - **LibreNMS service**: component/level/message extraction — polling INFO reclassified to level 1, ERROR/CRITICAL/WARNING at level 5
 - Program-only decoders for chronyd, snapd, dbus-daemon, pmxcfs, corosync, canonical-livepatch, fwupd, smokeping, opensearch-dashboards, proxmox-backup-proxy, and more — every journald event ends up decoded and traceable
+- **Proxmox VE task trail** (`pve_tasks.xml`): every qm/pct/API action logs a task with **actor and result** — VM/CT lifecycle completions (start/stop/reboot/migrate) at level 3 with *who did it* (`qmreboot VM 110 by user@realm — OK`), **vzdump backups finished OK (L3) / FAILED (L8)**, snapshots/rollbacks L3, any task error L7, task starts and apt housekeeping as level-1 telemetry
 - **Proxmox VE auth for ANY realm** (`pve_extra.xml`): the stock decoder only extracts the user for the `@pam`/`@pve` realms, so logins through custom realms (OIDC/SSO — e.g. an authentik realm) are not decoded at all. This full replacement (stock `0440` must be excluded — see [learning #25](#key-technical-learnings)) matches every realm and keeps the **full principal** (`user@realm`) in `dstuser`, which is what an audit trail needs
 - **Readable stock descriptions** (`stock_description_overrides.xml`): description-only `overwrite="yes"` of PAM 5501/5502, sshd 5715, sudo 5402/5403 and Proxmox VE 87201/87203 — the alert list shows *which user* (and source IP where available) without opening each event; conditions, levels, MITRE and groups stay verbatim from stock
 
@@ -227,6 +228,7 @@ cp decoders/authentik.xml /var/ossec/etc/decoders/             # Authentik IdP (
 cp decoders/pve_extra.xml /var/ossec/etc/decoders/             # Proxmox VE auth, any realm (requires excluding stock 0440 - step 4)
 cp decoders/docker_decoders.xml /var/ossec/etc/decoders/       # Docker container resources/health (agent command localfiles)
 cp decoders/synology.xml /var/ossec/etc/decoders/              # Synology DSM (Log Center syslog: auth, share access, SMB transfer log)
+cp decoders/pve_tasks.xml /var/ossec/etc/decoders/             # Proxmox VE task trail (actor+result on qm/pct/vzdump/... tasks)
 # Only if you have a Stormshield SNS firewall:
 cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
@@ -249,6 +251,7 @@ cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (
 cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
 cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
 cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM (100950-100959)
+cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -457,6 +460,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100800-100806 | MikroTik | DHCP bindings (assigned/deassigned/offering), debug option dump, iface links + flapping L8 |
 | 100820-100821 | Web | Malformed requests / scanner probes (single L5, repeated L8) |
 | 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (error L8), CRON, qemu-ga, LibreNMS, chronyd |
+| 100860-100867 | Proxmox VE | Task trail with actor+result (vzdump OK L3 / FAILED L8, VM/CT lifecycle by user L3, snapshots L3, task errors L7, starts/housekeeping L1) |
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |

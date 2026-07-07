@@ -1,0 +1,58 @@
+<!--
+  Proxmox VE task-trail decoders: every qm/pct/API action runs as a task and
+  journald carries its lifecycle with the ACTOR and RESULT, e.g.
+    pvedaemon[..]: requesting reboot of VM 110: UPID:node:...:qmreboot:110:user@realm:
+    pvedaemon[..]: <user@realm> end task UPID:node:...:qmreboot:110:user@realm: OK
+    pvescheduler[..]: <root@pam> starting task UPID:node:...:vzdump:100:root@pam:
+  The same child decoder (one per emitting program, all named pve-task so the
+  rules can anchor on a single decoded_as) extracts phase, node, task type,
+  VM/CT id, actor and result. Parents pvedaemon/pvestatd/pveproxy live in
+  pve_extra.xml and pvescheduler in journald_extra.xml (disjoint prematches).
+-->
+
+<decoder name="qm">
+  <program_name>^qm$</program_name>
+</decoder>
+
+<decoder name="pct">
+  <program_name>^pct$</program_name>
+</decoder>
+
+<decoder name="pveupdate">
+  <program_name>^pveupdate$</program_name>
+</decoder>
+
+<decoder name="pve-task">
+  <parent>pvedaemon</parent>
+  <prematch>UPID:</prematch>
+  <regex type="pcre2">(starting task|end task|requesting)(?: [\w ]+\d+:)? UPID:([\w\-\.]+):[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):(\d*):([^\s:]+):\s*(.*)$</regex>
+  <order>pve.phase, pve.node, pve.task, pve.vmid, dstuser, pve.result</order>
+</decoder>
+
+<decoder name="pve-task">
+  <parent>pvescheduler</parent>
+  <prematch>UPID:</prematch>
+  <regex type="pcre2">(starting task|end task|requesting)(?: [\w ]+\d+:)? UPID:([\w\-\.]+):[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):(\d*):([^\s:]+):\s*(.*)$</regex>
+  <order>pve.phase, pve.node, pve.task, pve.vmid, dstuser, pve.result</order>
+</decoder>
+
+<decoder name="pve-task">
+  <parent>qm</parent>
+  <prematch>UPID:</prematch>
+  <regex type="pcre2">(starting task|end task|requesting)(?: [\w ]+\d+:)? UPID:([\w\-\.]+):[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):(\d*):([^\s:]+):\s*(.*)$</regex>
+  <order>pve.phase, pve.node, pve.task, pve.vmid, dstuser, pve.result</order>
+</decoder>
+
+<decoder name="pve-task">
+  <parent>pct</parent>
+  <prematch>UPID:</prematch>
+  <regex type="pcre2">(starting task|end task|requesting)(?: [\w ]+\d+:)? UPID:([\w\-\.]+):[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):(\d*):([^\s:]+):\s*(.*)$</regex>
+  <order>pve.phase, pve.node, pve.task, pve.vmid, dstuser, pve.result</order>
+</decoder>
+
+<decoder name="pve-task">
+  <parent>pveupdate</parent>
+  <prematch>UPID:</prematch>
+  <regex type="pcre2">(starting task|end task|requesting)(?: [\w ]+\d+:)? UPID:([\w\-\.]+):[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):(\d*):([^\s:]+):\s*(.*)$</regex>
+  <order>pve.phase, pve.node, pve.task, pve.vmid, dstuser, pve.result</order>
+</decoder>
