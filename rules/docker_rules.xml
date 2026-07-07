@@ -1,0 +1,59 @@
+<!--
+  Rules for Docker container resource/health monitoring.
+  See decoders/docker_decoders.xml and the README "Docker containers"
+  device configuration (agent command localfiles: docker stats / docker ps).
+  Adapted from the Wazuh documentation PoC "Monitoring Docker containers
+  resource usage"; levels retuned to the house philosophy: periodic samples
+  are telemetry (level 1, archived, no alert), only the escalations alert.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100100-100119
+-->
+<group name="container,">
+
+  <!-- Periodic resource sample: telemetry (archived, sub-alert) -->
+  <rule id="100100" level="1">
+    <decoded_as>docker-container-resource</decoded_as>
+    <description>Docker: Container $(container_name) Resources</description>
+    <group>container_resource,</group>
+  </rule>
+
+  <!-- Rule to trigger when container CPU and memory usage are above 80%. -->
+  <rule id="100101" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_cpu_usage" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <field name="container_memory_perc" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) CPU usage ($(container_cpu_usage)) and memory usage ($(container_memory_perc)) is over 80%</description>
+    <group>container_resource,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Rule to trigger when container CPU usage is above 80%. -->
+  <rule id="100102" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_cpu_usage" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) CPU usage ($(container_cpu_usage)) is over 80%</description>
+    <group>container_resource,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Rule to trigger when container memory usage is above 80%. -->
+  <rule id="100103" level="12">
+    <if_sid>100100</if_sid>
+    <field name="container_memory_perc" type="pcre2">^(0*[8-9]\d|0*[1-9]\d{2,})</field>
+    <description>Docker: Container $(container_name) memory usage ($(container_memory_perc)) is over 80%</description>
+    <group>container_resource,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Periodic health sample: telemetry (archived, sub-alert) -->
+  <rule id="100105" level="1">
+    <decoded_as>docker-container-health</decoded_as>
+    <description>Docker: Container $(container_name) is $(container_health_status)</description>
+    <group>container_health,</group>
+  </rule>
+
+  <!-- Rule to trigger when a container is unhealthy. -->
+  <rule id="100106" level="12">
+    <if_sid>100105</if_sid>
+    <field name="container_health_status">^unhealthy$</field>
+    <description>Docker: Container $(container_name) is $(container_health_status)</description>
+    <group>container_health,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+</group>

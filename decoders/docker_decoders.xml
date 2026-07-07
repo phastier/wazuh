@@ -1,0 +1,33 @@
+<!--
+  Decoders for Docker container resource/health monitoring via two agent
+  command localfiles (docker stats / docker ps, see the README "Docker
+  containers" device configuration). Adapted from the Wazuh documentation
+  PoC "Monitoring Docker containers resource usage".
+  The out_format on the agent side prefixes the command output with the
+  docker-container-resource / docker-container-health program names these
+  parents match on.
+-->
+
+<!-- Decoder for container resources information. -->
+<decoder name="docker-container-resource">
+  <program_name>^docker-container-resource</program_name>
+</decoder>
+
+<decoder name="docker-container-resource-child">
+  <parent>docker-container-resource</parent>
+  <prematch>ossec: output: 'docker container stats':</prematch>
+  <regex>(\S+) (\S+) (\S+) (\S+) / (\S+) (\S+) (\S+) / (\S+)</regex>
+  <order>container_id, container_name, container_cpu_usage, container_memory_usage, container_memory_limit, container_memory_perc, container_network_rx, container_network_tx</order>
+</decoder>
+
+<!-- Decoder for container health information. -->
+<decoder name="docker-container-health">
+  <program_name>^docker-container-health</program_name>
+</decoder>
+
+<decoder name="docker-container-health-child">
+  <parent>docker-container-health</parent>
+  <prematch>ossec: output: 'docker container ps':</prematch>
+  <regex offset="after_prematch" type="pcre2">(\S+) (\S+) (.*?) \((.*?)\)</regex>
+  <order>container_image, container_name, container_uptime, container_health_status</order>
+</decoder>

@@ -1,10 +1,12 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
 The design philosophy is **decode everything, then triage by level**: every event type a device can emit gets decoded and traced (level 1 = archived without alerting), and only meaningful events alert (level 3+). Nothing is silently dropped — noise reduction happens at the source or at the rule level, never by leaving events undecoded.
+
+The second commitment is **compliance-first tagging**: every security-relevant rule carries the framework groups (**PCI DSS, GDPR, HIPAA, NIST 800-53, TSC**, GPG13 where applicable) and **MITRE ATT&CK** technique ids — so the network gear, MDM and IdP this ruleset covers show up in Wazuh's compliance dashboards exactly like the stock OS rules do. See [Compliance & MITRE ATT&CK tagging](#compliance--mitre-attck-tagging).
 
 Developed and tested on **Wazuh 4.14.3** by [Astier Consulting](https://www.astier-consulting.fr) — Apple/IT consulting with 30 years of datacenter management experience.
 
@@ -22,6 +24,15 @@ When we set out to integrate our network infrastructure into Wazuh, we found tha
 This repository provides production-tested decoders and rules that actually work, along with noise suppression tuning for real-world mixed environments.
 
 ## Features
+
+### Compliance & MITRE ATT&CK tagging
+Firewalls, switches, APs, MDM and IdP logs are exactly what auditors ask about — yet community rules rarely tag them, so they stay invisible in the compliance views. Here, **every security-relevant rule is tagged with PCI DSS, GDPR, HIPAA, NIST 800-53 and TSC group tokens** (plus GPG13 where the stock equivalent carries it) and **MITRE ATT&CK** technique ids, aimed at making a CISO's life easier:
+
+- The **Wazuh compliance dashboards** (PCI DSS, GDPR, HIPAA, NIST 800-53, TSC tabs) and the **MITRE ATT&CK module** light up out of the box for this ruleset's sources — evidence for logging/monitoring controls (e.g. PCI DSS 10.2.x authentication trails, 10.6.1 log review, 11.4 intrusion detection, 10.5.2 audit-trail protection) without extra work
+- Combos are **copied verbatim from the stock ruleset** per category (authentication success/failed/brute force, `firewall_drop`/`multiple_drops`, `config_changed`, `account_changed`, `attack`/`recon`, `service_availability`, admin actions, sensitive-object reads), so the semantics match what analysts already know from the OS rules
+- Pure telemetry (level 0/1 noise, presence tracking, radio chatter) is **deliberately left untagged** — the dashboards show signal, not volume
+
+If you find a rule that deserves a tag it does not have, open an issue — pushing the decoders as far as they can go for compliance is a goal of this project, not an afterthought.
 
 ### MikroTik RouterOS 7.x
 Custom decoders and rules — nothing usable existed for RouterOS 7.x BSD syslog.
@@ -115,6 +126,13 @@ Decoders and rules for authentik's structlog JSON, collected through the Docker 
 - **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
 
+### Docker containers (resource & health)
+Per-container resource and health monitoring through two agent **command localfiles** (`docker stats` / `docker ps`, adapted from the Wazuh documentation PoC) — no API socket exposure, no sidecar:
+
+- **Resources** (`docker stats`): CPU, memory usage/limit/percent, network I/O per container — periodic samples are telemetry (level 1, archived); **CPU or memory above 80% escalates to level 12**
+- **Health** (`docker ps`): image, uptime and health status per container — **`unhealthy` escalates to level 12**
+- Pairs naturally with the [Authentik section](#authentik-idp-goauthentik) (or any compose stack): the containers' *stdout* goes through the journald driver, their *resource envelope* through these commands
+
 ## Architecture
 ```
 MikroTik router (RouterOS) ──┐
@@ -197,6 +215,7 @@ cp decoders/journald_extra.xml /var/ossec/etc/decoders/        # zed, pveschedul
 cp decoders/web_accesslog_malformed.xml /var/ossec/etc/decoders/  # scanner probes on public endpoints
 cp decoders/authentik.xml /var/ossec/etc/decoders/             # Authentik IdP (structlog JSON via journald)
 cp decoders/pve_extra.xml /var/ossec/etc/decoders/             # Proxmox VE auth, any realm (requires excluding stock 0440 - step 4)
+cp decoders/docker_decoders.xml /var/ossec/etc/decoders/       # Docker container resources/health (agent command localfiles)
 # Only if you have a Stormshield SNS firewall:
 cp decoders/stormshield_sns.xml /var/ossec/etc/decoders/          # Stormshield SNS key=value syslog (all logtypes)
 # Only if you use UniFi Protect (CEF format):
@@ -217,6 +236,7 @@ cp rules/web_malformed_rules.xml /var/ossec/etc/rules/         # scanner detecti
 cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS (100900-100919)
 cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (101000-101042)
 cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
+cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -336,6 +356,33 @@ Agent side (`/var/ossec/etc/ossec.conf`), the standard journald collection is al
 
 Recreate the containers (`docker compose up -d`) for the driver change to apply. The decoder carries **no payload regex**: the JSON plugin decoder extracts every key (`logger`, `event`, `action`, `client_ip`, nested `user.username`, `context.*`, `method`, `status`, `remote`), which keeps it robust across authentik releases. Non-JSON payloads (tracebacks) still match the parent decoder, so the severity-mapping rules see them.
 
+### Docker containers (agent command localfiles)
+On the Docker host's agent (or centrally via a shared group `agent.conf`, as shown), two command localfiles sample the containers; the `out_format` prefix is what the decoders match on:
+
+```xml
+<agent_config>
+  <!-- Command to extract container resource information. -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>docker stats --format "{{.Container}} {{.Name}} {{.CPUPerc}} {{.MemUsage}} {{.MemPerc}} {{.NetIO}}" --no-stream</command>
+    <alias>docker container stats</alias>
+    <frequency>120</frequency>
+    <out_format>$(timestamp) $(hostname) docker-container-resource: $(log)</out_format>
+  </localfile>
+
+  <!-- Command to extract container health information. -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>docker ps --format "{{.Image}} {{.Names}} {{.Status}}"</command>
+    <alias>docker container ps</alias>
+    <frequency>120</frequency>
+    <out_format>$(timestamp) $(hostname) docker-container-health: $(log)</out_format>
+  </localfile>
+</agent_config>
+```
+
+Remote commands pushed from the manager require `logcollector.remote_commands=1` in the agent's `local_internal_options.conf`.
+
 ### Wazuh Server (rsyslog)
 Create `/etc/rsyslog.d/10-mikrotik.conf`:
 ```
@@ -348,6 +395,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 
 | Range | Device | Category |
 |-------|--------|----------|
+| 100100-100106 | Docker | Container resources & health (samples L1; CPU/mem >80% and unhealthy at L12) |
 | 100200-100211 | MikroTik | Firewall (DROP, invalid, scan detection) |
 | 100220-100223 | MikroTik | Authentication (login, brute force) |
 | 100230-100233 | MikroTik | DHCP operations |
