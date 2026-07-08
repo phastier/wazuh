@@ -1,0 +1,124 @@
+<!--
+  Office 365 custom rules on top of the stock 0755-office365_rules.xml.
+  Two goals:
+   1. Cut the noise: MailItemsAccessed (stock 91578) floods at level 5
+      (thousands/week of routine mailbox auditing) — overwrite it to level 3
+      (still archived/searchable) and add a mass-access correlation, since the
+      real signal is a SPIKE by one user (compromise/exfil), not each read.
+   2. Surface the security signals the stock ruleset leaves flat at level 3:
+      failed logins + brute force, admin security-config changes, mailbox
+      forwarding/delegation (BEC), phishing/malware.
+  Field notes: office365.Operation / UserId / ClientIPAddress / ResultStatus
+  are dynamic JSON fields (safe with <field name>). 91532 is the common base
+  of the O365 family; higher-level children win over the stock RecordType
+  rules.
+  Astier Consulting - Jul 2026
+  Rule IDs: 101100-101125
+-->
+<group name="office365,">
+
+  <!-- ===== 1. Noise: MailItemsAccessed L5 -> L3 (overwrite stock) ===== -->
+  <rule id="91578" level="3" overwrite="yes">
+    <if_sid>91532</if_sid>
+    <field name="office365.RecordType" type="osregex">^50$</field>
+    <description>Office 365: MailItemsAccessed (mailbox auditing) — routine, traced</description>
+    <options>no_full_log</options>
+    <group>ExchangeItemAggregated,hipaa_164.312.b,pci_dss_10.6.2,</group>
+  </rule>
+
+  <!-- Mass mailbox access by one user: compromise / exfiltration indicator -->
+  <rule id="101120" level="10" frequency="60" timeframe="120">
+    <if_matched_sid>91578</if_matched_sid>
+    <same_field>office365.UserId</same_field>
+    <description>Office 365: mass mailbox access by $(office365.UserId) (60+ MailItemsAccessed in 2 min) — possible compromise/exfil</description>
+    <mitre>
+      <id>T1114</id>
+    </mitre>
+    <group>office365,exfiltration,pci_dss_10.2.1,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- ===== 2. Authentication: failed logins + brute force ===== -->
+  <rule id="101101" level="5">
+    <if_sid>91545</if_sid>
+    <field name="office365.Operation">UserLoginFailed</field>
+    <description>Office 365: FAILED login for $(office365.UserId) from $(office365.ClientIPAddress)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>office365,authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="101102" level="10" frequency="8" timeframe="600">
+    <if_matched_sid>101101</if_matched_sid>
+    <same_field>office365.UserId</same_field>
+    <description>Office 365: possible brute force on $(office365.UserId) (8+ failed logins in 10 min)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>office365,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- ===== 3. Admin security-config changes ===== -->
+  <rule id="101110" level="8">
+    <if_sid>91532</if_sid>
+    <field name="office365.Operation" type="pcre2">^(?:Set-ConditionalAccessPolicy|New-ConditionalAccessPolicy|Remove-ConditionalAccessPolicy|Set-TransportConfig|New-TransportRule|Set-TransportRule|Set-OrganizationConfig|Disable-AntiPhishRule|Set-AntiPhishPolicy)$</field>
+    <description>Office 365: security policy change — $(office365.Operation) by $(office365.UserId)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>office365,config_changed,policy_changed,pci_dss_10.2.7,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,tsc_CC8.1,</group>
+  </rule>
+
+  <!-- Mailbox forwarding / inbox rules / delegation: classic BEC / persistence -->
+  <rule id="101111" level="10">
+    <if_sid>91532</if_sid>
+    <field name="office365.Operation" type="pcre2">^(?:New-InboxRule|Set-InboxRule|Enable-InboxRule|Add-MailboxPermission|Add-RecipientPermission|Set-Mailbox.*ForwardingSMTPAddress)$</field>
+    <description>Office 365: mailbox rule/forwarding/delegation — $(office365.Operation) by $(office365.UserId) (BEC indicator)</description>
+    <mitre>
+      <id>T1114.003</id>
+      <id>T1098.002</id>
+    </mitre>
+    <group>office365,account_changed,pci_dss_10.2.2,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- Admin role assignment in Azure AD -->
+  <rule id="101112" level="8">
+    <if_sid>91532</if_sid>
+    <field name="office365.Operation" type="pcre2">^(?:Add member to role|Add eligible member to role|Set-AdminRole)</field>
+    <description>Office 365: privileged role assignment — $(office365.Operation) by $(office365.UserId)</description>
+    <mitre>
+      <id>T1098.003</id>
+    </mitre>
+    <group>office365,account_changed,pci_dss_10.2.5,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- ===== 4. Phishing / malware: keep L12, add tags + MITRE ===== -->
+  <rule id="91556" level="12" overwrite="yes">
+    <if_sid>91532</if_sid>
+    <field name="office365.RecordType" type="osregex">^28$</field>
+    <description>Office 365: phishing/malware event from Exchange Online Protection / Defender</description>
+    <mitre>
+      <id>T1566</id>
+    </mitre>
+    <group>office365,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- ===== 5. Bulk hard-delete: potential exfil cleanup ===== -->
+  <rule id="101114" level="3">
+    <if_sid>91532</if_sid>
+    <field name="office365.Operation">HardDelete</field>
+    <description>Office 365: HardDelete by $(office365.UserId)</description>
+    <group>office365,</group>
+  </rule>
+
+  <rule id="101115" level="8" frequency="50" timeframe="300">
+    <if_matched_sid>101114</if_matched_sid>
+    <same_field>office365.UserId</same_field>
+    <description>Office 365: bulk HardDelete by $(office365.UserId) (50+ in 5 min) — possible evidence removal</description>
+    <mitre>
+      <id>T1070.008</id>
+    </mitre>
+    <group>office365,pci_dss_10.2.7,gdpr_IV_35.7.d,nist_800_53_SI.4,tsc_CC6.8,</group>
+  </rule>
+
+</group>

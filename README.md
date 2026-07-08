@@ -1,6 +1,6 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Synology DSM (NAS)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Synology DSM (NAS)**, **Microsoft 365 (Office 365 audit)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
@@ -139,6 +139,17 @@ Decoders and rules for authentik's structlog JSON, collected through the Docker 
 - **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
 
+### Microsoft 365 (Office 365)
+Supplementary rules on top of Wazuh's built-in Office 365 module (`office365_extra_rules.xml`). The stock ruleset ingests the Management Activity API fine but leaves the security signal flat — routine mailbox auditing floods the alert view while real threats sit at level 3:
+
+- **Noise cut**: `MailItemsAccessed` (stock 91578) is overwritten from **level 5 → level 3** — thousands/week of routine mailbox auditing no longer bury everything, but stay archived/searchable. The real signal is a **spike by one user** (compromise/exfil), caught by a mass-access correlation (60+ in 2 min → level 10)
+- **Authentication**: `UserLoginFailed` surfaced at level 5 with a **brute-force correlation** (8+ from the same account in 10 min → level 10)
+- **Admin security changes** (level 8): conditional-access policy, transport config/rules, anti-phish policy, org config — the settings an attacker weakens
+- **BEC / persistence** (level 10): mailbox **forwarding rules**, inbox rules, mailbox **delegation** (`Add-MailboxPermission`) — the classic Business Email Compromise footprint (MITRE T1114.003 / T1098.002)
+- **Privileged role assignment** (level 8), **bulk HardDelete** correlation (50+ in 5 min → level 8, possible evidence removal)
+- **Phishing / malware** (stock 91556): kept at level 12, retagged with MITRE T1566 and compliance groups
+- **Compliance tagging** throughout (PCI DSS, GDPR, HIPAA, NIST 800-53, TSC); MITRE T1110/T1114/T1098/T1562/T1566/T1070
+
 ### Docker containers (resource & health)
 Per-container resource and health monitoring through two agent **command localfiles** (`docker stats` / `docker ps`, adapted from the Wazuh documentation PoC) — no API socket exposure, no sidecar:
 
@@ -262,6 +273,7 @@ cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (
 cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
 cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
 cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM + Hyper Backup (100950-100966)
+cp rules/office365_extra_rules.xml /var/ossec/etc/rules/       # Office 365: noise cut + auth/admin/BEC/phishing (101100-101125)
 cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
@@ -477,6 +489,8 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
 | 100950-100959 | Synology | DSM sign-in L3 / failed L5 + brute force L10, share access L3, SMB file ops L1 + mass-deletion (ransomware tripwire) L10 (Time Machine paths excluded, 100966) |
 | 100960-100966 | Synology | Hyper Backup off-site: started L1, **finished successfully L3**, **failed L8**, version rotation L1 |
+| 91578, 91556 (overwrite) | Office 365 | MailItemsAccessed L5→L3 (noise), phishing/malware kept L12 + tags |
+| 101100-101125 | Office 365 | Failed login L5 + brute force L10, mass mailbox access L10, admin security changes L8, BEC forwarding/delegation L10, role assignment L8, bulk HardDelete L8 |
 | 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |
 | 101010-101022 | Authentik | Audit trail (login/logout L3, failed login L5 + brute force L10, app authorization L3, account/credential change L5, config change L5, impersonation L8, suspicious request L8, exceptions L6) |
 | 101030-101034 | Authentik | HTTP access (all decoded L0, 401/403 L5, 404 L3 + scanner correlation L8, 5xx L5) |
