@@ -63,14 +63,26 @@
     <group>synology,smb,file_op,</group>
   </rule>
 
-  <!-- Mass deletion from one source: ransomware or destructive cleanup on
-       the NAS. Backup thinning (Time Machine) can trip this — tune the
-       threshold or exclude the backup user if it proves noisy. -->
+  <!-- Delete on a real (non-backup) share: feeds the mass-deletion tripwire.
+       Time Machine paths are excluded (pcre2 negative lookahead) so legitimate
+       backup thinning never trips the ransomware correlation — those go to
+       100966 instead. -->
   <rule id="100958" level="1">
     <if_sid>100957</if_sid>
     <field name="synology.op" type="pcre2">^delete$</field>
+    <field name="synology.path" type="pcre2">^(?!/timemachine/)</field>
     <description>Synology file op: DELETE $(synology.path) by $(dstuser)</description>
     <group>synology,smb,file_op,delete,</group>
+  </rule>
+
+  <!-- Time Machine backup churn (rename-then-delete of sparsebundle bands):
+       traced without alerting, and NOT fed into the mass-deletion tripwire. -->
+  <rule id="100966" level="1">
+    <if_sid>100957</if_sid>
+    <field name="synology.op" type="pcre2">^delete$</field>
+    <field name="synology.path" type="pcre2">^/timemachine/</field>
+    <description>Synology file op: DELETE (Time Machine housekeeping) $(synology.path)</description>
+    <group>synology,smb,file_op,delete,timemachine,</group>
   </rule>
 
   <rule id="100959" level="10" frequency="100" timeframe="60">
@@ -88,6 +100,49 @@
     <decoded_as>synology-system</decoded_as>
     <description>Synology DSM: system message</description>
     <group>synology,system,</group>
+  </rule>
+
+  <!-- ===== Hyper Backup (off-site backup) =====
+       Base at level 3: the failure line contains "failed", which stock rule
+       1002 (level 2) would otherwise steal (see the ZFS/MikroTik bases). -->
+  <rule id="100960" level="3">
+    <decoded_as>synology-hyperbackup</decoded_as>
+    <description>Synology Hyper Backup: event</description>
+    <group>synology,hyperbackup,</group>
+  </rule>
+
+  <!-- Backup task started: telemetry, traced without alerting -->
+  <rule id="100961" level="1">
+    <if_sid>100960</if_sid>
+    <field name="synology.backup_result" type="pcre2">^started$</field>
+    <description>Synology Hyper Backup: task [$(synology.backup_job)] started</description>
+    <group>synology,hyperbackup,</group>
+  </rule>
+
+  <!-- Version rotation housekeeping: telemetry, traced without alerting -->
+  <rule id="100964" level="1">
+    <if_sid>100960</if_sid>
+    <match>ersion rotation|Rotate version</match>
+    <description>Synology Hyper Backup: version rotation housekeeping</description>
+    <group>synology,hyperbackup,</group>
+  </rule>
+
+  <!-- Backup task finished successfully: off-site backup OK (visible) -->
+  <rule id="100962" level="3">
+    <if_sid>100960</if_sid>
+    <field name="synology.backup_result" type="pcre2">^finished$</field>
+    <description>Synology Hyper Backup: task [$(synology.backup_job)] finished successfully</description>
+    <group>synology,hyperbackup,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Backup task failed/aborted: off-site backup broken = critical signal.
+       Matched on the raw log (failure wording to confirm against a real
+       failure sample). -->
+  <rule id="100963" level="8">
+    <if_sid>100960</if_sid>
+    <match>Backup task failed|Backup task aborted|finished with error|Failed to backup</match>
+    <description>Synology Hyper Backup: task [$(synology.backup_job)] FAILED — off-site backup broken</description>
+    <group>synology,hyperbackup,backup_failure,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
   </rule>
 
 </group>

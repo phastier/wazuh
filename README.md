@@ -67,6 +67,17 @@ Custom decoders and rules — the existing BNC community rules are broken. The C
 - **AP kernel events** (`unifi_ap_kernel.xml`): `kernel:` lines carry no PID and escape the hostapd decoders. Covers **802.11 auth/assoc frames** (station MAC, RSSI, algorithm — real security value), per-client **DHCP state machine** traces, **DNS timeout tracking** per station, **VLAN assignment failures**, and generic wlan errors/warnings
 - **USW-Flex 2.5G & UPS Tower** (`unifi_mca.xml`): these adopt-managed devices log **without a syslog timestamp** (the line starts with the hostname), so the pre-decoder extracts nothing and every event was undecoded. Covers MCA informs, **controller inform failures** (HTTP 4xx/5xx with a persistent-failure correlation → level 7), port link up/down, STP transitions
 
+#### What needs UniFi *debug/verbose* logging vs what does not
+UniFi's syslog config has two independent knobs (*Settings → System → Logging*): the per-device **Logging Levels** (Info/Verbose) and a separate **Debug Logs** toggle. This matters when you tune noise — cutting them does **not** cost you the security-relevant events, which ride the controller's own activity log:
+
+| Always available (controller CEF activity log) | Needs Verbose / per-device syslog | Needs Debug Logs |
+|---|---|---|
+| WiFi **client connect / disconnect / roam**, wired connect/disconnect | Per-AP syslog daemon messages (`unifi-ap`) | UDM **system** syslog: sudo trail, IPS list update failures, earlyoom, systemd unit failures (`unifi_udm_syslog.xml`, doubled-hostname mode) |
+| Admin / console access, config created/modified/removed (audit) | AP **kernel** 802.11 auth/assoc, DNS timeouts, VLAN/DHCP-SM traces (`unifi_ap_kernel.xml`) | Some CEF event types only surface at debug (e.g. Config Modified ID 546 — see learning #13) |
+| IDS/IPS threats, firewall, DHCP, device/software updates, UPS | USW-Flex / UPS Tower MCA informs, port links (`unifi_mca.xml`) | |
+
+**Takeaway**: the station lifecycle (connect/disconnect/roam), admin audit, IDS and firewall are on the *always-available* controller log — safe to run with Debug off. Turn **Debug Logs** on only when you specifically want the **UDM host's own admin audit** (sudo/IPS-update/systemd), and accept its verbosity. Verbose device logging is worth it for the AP-kernel security signals (802.11 auth) but is the bulk of the volume.
+
 ### Fortinet FortiGate
 Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work well). The focus here is **noise suppression and VPN monitoring** — in environments with Apple devices, Bonjour/mDNS generates thousands of deny logs per minute that bury real security events.
 
@@ -250,7 +261,7 @@ cp rules/stormshield_sns_rules.xml /var/ossec/etc/rules/       # Stormshield SNS
 cp rules/authentik_rules.xml /var/ossec/etc/rules/             # Authentik IdP (101000-101042)
 cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/IP in stock PAM/sshd/sudo/PVE alerts
 cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
-cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM (100950-100959)
+cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM + Hyper Backup (100950-100966)
 cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
@@ -459,12 +470,13 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100770-100778 | UniFi | USW-Flex 2.5G + UPS Tower (port links, inform failures + persistence L7, heartbeats) |
 | 100800-100806 | MikroTik | DHCP bindings (assigned/deassigned/offering), debug option dump, iface links + flapping L8 |
 | 100820-100821 | Web | Malformed requests / scanner probes (single L5, repeated L8) |
-| 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (error L8), CRON, qemu-ga, LibreNMS, chronyd |
+| 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (**finished OK L3 — 100848**, error L8), CRON, qemu-ga, LibreNMS, chronyd |
 | 100860-100867 | Proxmox VE | Task trail with actor+result (vzdump OK L3 / FAILED L8, VM/CT lifecycle by user L3, snapshots L3, task errors L7, starts/housekeeping L1) |
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
-| 100950-100959 | Synology | DSM sign-in L3 / failed L5 + brute force L10, share access L3, SMB file ops L1 + mass-deletion (ransomware tripwire) L10 |
+| 100950-100959 | Synology | DSM sign-in L3 / failed L5 + brute force L10, share access L3, SMB file ops L1 + mass-deletion (ransomware tripwire) L10 (Time Machine paths excluded, 100966) |
+| 100960-100966 | Synology | Hyper Backup off-site: started L1, **finished successfully L3**, **failed L8**, version rotation L1 |
 | 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |
 | 101010-101022 | Authentik | Audit trail (login/logout L3, failed login L5 + brute force L10, app authorization L3, account/credential change L5, config change L5, impersonation L8, suspicious request L8, exceptions L6) |
 | 101030-101034 | Authentik | HTTP access (all decoded L0, 401/403 L5, 404 L3 + scanner correlation L8, 5xx L5) |

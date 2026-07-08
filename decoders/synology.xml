@@ -51,3 +51,18 @@
 <decoder name="synology-system">
   <prematch type="pcre2">^System </prematch>
 </decoder>
+
+<!-- Hyper Backup (off-site backup, e.g. to S3): "Hyper_Backup:" syslog tag.
+     Shape: "SYSTEM:\t[Amazon S3][S3 Backup 2] Backup task finished successfully.
+     [N files scanned] ..." — the LAST bracket before "Backup task" is the job
+     name. Explicit char classes (no [^\]]+, see README learning #2). -->
+<decoder name="synology-hyperbackup">
+  <program_name>^Hyper_Backup$</program_name>
+</decoder>
+
+<decoder name="synology-hyperbackup-task">
+  <parent>synology-hyperbackup</parent>
+  <prematch> Backup task </prematch>
+  <regex type="pcre2">\[([\w\s]+)\] Backup task (\w+)</regex>
+  <order>synology.backup_job, synology.backup_result</order>
+</decoder>

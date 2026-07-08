@@ -60,6 +60,18 @@
     <group>proxmox,</group>
   </rule>
 
+  <!-- Backup completed OK: pvescheduler logs "INFO: Finished Backup of VM X"
+       (NOT an "end task ... OK" UPID line — those never reach journald for
+       scheduled jobs). This is the real success signal a "no backup in 24h"
+       absence monitor must key on. -->
+  <rule id="100848" level="3">
+    <if_sid>100845</if_sid>
+    <match>Finished Backup of VM </match>
+    <field name="level" type="pcre2">^INFO$</field>
+    <description>Proxmox: backup of VM $(vm.id) finished OK</description>
+    <group>proxmox,backup,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
   <!-- ===== CRON via journald: traced without alerting ===== -->
   <rule id="100850" level="1">
     <decoded_as>crond-journald</decoded_as>
