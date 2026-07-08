@@ -139,6 +139,14 @@ Decoders and rules for authentik's structlog JSON, collected through the Docker 
 - **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
 
+### Proxmox pveproxy (Web UI + API access)
+Rules for the Proxmox `pveproxy` access log (`/var/log/pveproxy/access.log`, collected by the agent on each PVE node — `pve_access_rules.xml`). The log is Apache-ish but uses an all-numeric date (`DD/MM/YYYY`), so the **stock `web-accesslog` decoder** wins the prematch and already extracts srcip/url/status/method — the custom rules build on it (keyed on the `/api2/…` paths nginx never serves) rather than fighting a shared decoder:
+
+- **Web/API login** (`POST …/access/ticket` 200) → level 3; **failed login** (401/403) → level 6 with a **brute-force correlation** (6+ from one IP in 2 min → level 10)
+- **Mutating API call** (`POST`/`PUT`/`DELETE` on `/api2/…`, excluding the auth ticket) → level 4 — an admin action on the hypervisor (VM/CT lifecycle, config)
+- UI polling (`GET /api2/… 200`, the bulk) stays on stock rule 31108 at level 0 — traced, no alert
+- The authenticated `user@realm` is not in this log's stock decode, but the **same login is already decoded from journald** (`pvedaemon`, rules 87201/87203 via `pve_extra.xml`) with the full principal — cross-reference by IP + time
+
 ### Microsoft 365 (Office 365)
 Supplementary rules on top of Wazuh's built-in Office 365 module (`office365_extra_rules.xml`). The stock ruleset ingests the Management Activity API fine but leaves the security signal flat — routine mailbox auditing floods the alert view while real threats sit at level 3:
 
@@ -274,6 +282,7 @@ cp rules/stock_description_overrides.xml /var/ossec/etc/rules/ # readable user/I
 cp rules/docker_rules.xml /var/ossec/etc/rules/                # Docker container resources/health (100100-100106)
 cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM + Hyper Backup (100950-100966)
 cp rules/office365_extra_rules.xml /var/ossec/etc/rules/       # Office 365: noise cut + auth/admin/BEC/phishing (101100-101125)
+cp rules/pve_access_rules.xml /var/ossec/etc/rules/            # Proxmox pveproxy Web/API access (101131-101135, on stock web-accesslog)
 cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
@@ -491,6 +500,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100960-100966 | Synology | Hyper Backup off-site: started L1, **finished successfully L3**, **failed L8**, version rotation L1 |
 | 91578, 91556 (overwrite) | Office 365 | MailItemsAccessed L5→L3 (noise), phishing/malware kept L12 + tags |
 | 101100-101125 | Office 365 | Failed login L5 + brute force L10, mass mailbox access L10, admin security changes L8, BEC forwarding/delegation L10, role assignment L8, bulk HardDelete L8 |
+| 101131-101135 | Proxmox pveproxy | Web/API login L3, failed login L6 + brute force L10, mutating API call L4 (built on the stock web-accesslog decoder; UI polling stays stock 31108 L0) |
 | 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |
 | 101010-101022 | Authentik | Audit trail (login/logout L3, failed login L5 + brute force L10, app authorization L3, account/credential change L5, config change L5, impersonation L8, suspicious request L8, exceptions L6) |
 | 101030-101034 | Authentik | HTTP access (all decoded L0, 401/403 L5, 404 L3 + scanner correlation L8, 5xx L5) |

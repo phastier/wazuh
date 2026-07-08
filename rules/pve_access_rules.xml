@@ -1,0 +1,65 @@
+<!--
+  Rules for the Proxmox pveproxy access log (/var/log/pveproxy/access.log),
+  collected by the Wazuh agent on each PVE node and decoded by the STOCK
+  web-accesslog decoder (it wins the prematch over any custom decoder, and is
+  shared with nginx — so we build on top of it rather than replacing it).
+  Discriminator: pveproxy URLs are /api2/... which nginx never serves.
+  Fields from the stock decoder: srcip, url, id (=HTTP status), protocol
+  (=method). The authenticated user@realm is NOT in this log's stock decode,
+  but the same login is already decoded from journald (pvedaemon, rules
+  87201/87203) with the full principal — cross-reference by IP+time.
+  Astier Consulting - Jul 2026
+  Rule IDs: 101130-101145
+  Doctrine: UI polling (GET /api2/... 200) already lands on stock 31108 (L0);
+  we only add the security signals: login, failed login + brute force, and
+  mutating API calls (config change on the hypervisor).
+-->
+<group name="pve,proxmox,pveproxy,">
+
+  <!-- Successful Web/API login: POST .../access/ticket 200 -->
+  <rule id="101131" level="3">
+    <if_sid>31100,31101,31108,31122</if_sid>
+    <match>"POST /api2/json/access/ticket HTTP</match>
+    <id>200</id>
+    <description>Proxmox: successful Web/API login from $(srcip)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>pveproxy,authentication_success,pci_dss_10.2.5,gpg13_7.1,gpg13_7.2,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Failed Web/API login: ticket 401/403 -->
+  <rule id="101132" level="6">
+    <if_sid>31100,31101,31108,31122</if_sid>
+    <match>"POST /api2/json/access/ticket HTTP</match>
+    <id>^40</id>
+    <description>Proxmox: FAILED Web/API login from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>pveproxy,authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="101133" level="10" frequency="6" timeframe="120">
+    <if_matched_sid>101132</if_matched_sid>
+    <same_srcip />
+    <description>Proxmox: possible brute force on Web/API from $(srcip) (6+ failed logins in 2 min)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>pveproxy,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,pci_dss_11.4,gdpr_IV_35.7.d,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Mutating API call (config/VM/CT change via API), excluding the auth
+       ticket POST — this is an admin action on the hypervisor. -->
+  <rule id="101135" level="4">
+    <if_sid>31100,31101,31108,31122</if_sid>
+    <regex type="pcre2">"(?:POST|PUT|DELETE) /api2/\w+/(?!access/ticket)</regex>
+    <description>Proxmox API: mutating call $(url) from $(srcip)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+    <group>pveproxy,config_changed,pci_dss_10.2.2,pci_dss_10.2.7,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,tsc_CC8.1,</group>
+  </rule>
+
+</group>
