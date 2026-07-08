@@ -14,7 +14,7 @@
   <rule id="100870" level="3">
     <decoded_as>pbs-task</decoded_as>
     <description>PBS task: $(pbs.task) $(pbs.worker) — $(pbs.status)</description>
-    <group>pbs,task,</group>
+    <group>pbs,task,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <!-- Success: traced without alerting -->

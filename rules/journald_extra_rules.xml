@@ -36,7 +36,7 @@
     <if_sid>100840</if_sid>
     <field name="zfs.class" type="pcre2">^scrub_</field>
     <description>ZFS: $(zfs.class) on pool $(zfs.pool)</description>
-    <group>zfs,scrub,</group>
+    <group>zfs,scrub,pci_dss_10.6.1,gdpr_IV_35.7.d,nist_800_53_AU.6,tsc_A1.2,</group>
   </rule>
 
   <!-- ===== Proxmox pvescheduler (backup jobs) ===== -->
@@ -44,7 +44,7 @@
     <decoded_as>pvescheduler</decoded_as>
     <field name="vm.id" type="pcre2">.+</field>
     <description>Proxmox: $(action) backup of VM $(vm.id)</description>
-    <group>proxmox,backup,</group>
+    <group>proxmox,backup,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
   <rule id="100846" level="8">

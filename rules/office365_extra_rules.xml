@@ -108,7 +108,7 @@
     <if_sid>91532</if_sid>
     <field name="office365.Operation">HardDelete</field>
     <description>Office 365: HardDelete by $(office365.UserId)</description>
-    <group>office365,</group>
+    <group>office365,pci_dss_10.2.7,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,tsc_CC6.8,</group>
   </rule>
 
   <rule id="101115" level="8" frequency="50" timeframe="300">
