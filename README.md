@@ -1,6 +1,6 @@
 # Wazuh Custom Decoders & Rules for Network Infrastructure & MDM
 
-Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Synology DSM (NAS)**, **Microsoft 365 (Office 365 audit)**, **Docker containers**, and **Linux/Proxmox hosts (journald)**, providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
+Custom Wazuh SIEM integration for **Ubiquiti UniFi (Network controller — UDM Pro Max, UDM SE or any UniFi OS console — plus APs, switches, UPS)**, **MikroTik RouterOS 7.x**, **Fortinet FortiGate**, **Stormshield SNS (SN-series NG firewalls)**, **Jamf Pro (on-prem MDM)**, **Authentik IdP (goauthentik)**, **Synology DSM (NAS)**, **Microsoft 365 (Office 365 audit)**, **Docker containers**, and **the full Proxmox stack — Proxmox VE (journald + task trail + pveproxy Web/API access) and Proxmox Backup Server (task/verify integrity)** — providing comprehensive log decoding, field extraction, noise suppression, and alerting rules.
 
 It also ships an **in-situ log anonymiser** (`tools/sns-anonymize.py`) so you can build and share decoder sample corpora without ever exposing production personal data — see [Log anonymiser](#log-anonymiser).
 
@@ -138,6 +138,14 @@ Decoders and rules for authentik's structlog JSON, collected through the Docker 
 - **Framework security** (`django.security.*`) plus a generic warn/error/critical mapping, so no logger escapes unclassified
 - **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
+
+### Proxmox Backup Server (task integrity)
+Rules for the PBS task archive (`/var/log/proxmox-backup/tasks/archive`, one raw `UPID:…: <end> <status>` line per completed task — `pbs_tasks.xml` + `pbs_task_rules.xml`). Backup **integrity** is the point: completions are traced (OK at level 1), and the signal is failure:
+
+- **Verify FAILED → level 10** (MITRE T1490): a verification task failing means a *stored backup is corrupt* — the single most important backup-integrity alert
+- **Backup FAILED → level 8**, any other task failure (GC / prune / sync) → level 7, warnings / `unknown` → level 4
+- Covers backup, verify, garbage_collection, prune, logrotate, reader tasks; the worker id keeps the datastore + target (`atlas-pbs:vm-110`). Base at level 3 so failure lines aren't stolen by stock rule 1002
+- Note the transient `read fs info … ENODEV` / `400 Bad Request` on a datastore-status API poll is the **automount** warming up (an `x-systemd.automount` NFS datastore) — not a task failure, and correctly not matched here
 
 ### Proxmox pveproxy (Web UI + API access)
 Rules for the Proxmox `pveproxy` access log (`/var/log/pveproxy/access.log`, collected by the agent on each PVE node — `pve_access_rules.xml`). The log is Apache-ish but uses an all-numeric date (`DD/MM/YYYY`), so the **stock `web-accesslog` decoder** wins the prematch and already extracts srcip/url/status/method — the custom rules build on it (keyed on the `/api2/…` paths nginx never serves) rather than fighting a shared decoder:
@@ -284,6 +292,7 @@ cp rules/synology_rules.xml /var/ossec/etc/rules/              # Synology DSM + 
 cp rules/office365_extra_rules.xml /var/ossec/etc/rules/       # Office 365: noise cut + auth/admin/BEC/phishing (101100-101125)
 cp rules/pve_access_rules.xml /var/ossec/etc/rules/            # Proxmox pveproxy Web/API access (101131-101135, on stock web-accesslog)
 cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
+cp rules/pbs_task_rules.xml /var/ossec/etc/rules/              # Proxmox Backup Server task archive (100870-100875)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -493,6 +502,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100820-100821 | Web | Malformed requests / scanner probes (single L5, repeated L8) |
 | 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (**finished OK L3 — 100848**, error L8), CRON, qemu-ga, LibreNMS, chronyd |
 | 100860-100867 | Proxmox VE | Task trail with actor+result (vzdump OK L3 / FAILED L8, VM/CT lifecycle by user L3, snapshots L3, task errors L7, starts/housekeeping L1) |
+| 100870-100873, 100874-100875 | Proxmox Backup Server | Task archive: OK L1, warnings/unknown L4, task FAILED L7, backup FAILED L8, **VERIFY FAILED = stored backup corrupt L10** (T1490) |
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |

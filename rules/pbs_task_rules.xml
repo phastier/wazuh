@@ -1,0 +1,63 @@
+<!--
+  Rules for the pbs-task decoder (Proxmox Backup Server task archive).
+  See decoders/pbs_tasks.xml.
+  Astier Consulting - Jul 2026
+  Rule IDs: 100870-100889
+  Doctrine: backup INTEGRITY is the point. Task completions are traced (OK at
+  L1); the signal is FAILURE — and a failed VERIFY means a stored backup is
+  corrupt, the single most important backup-integrity alert (L10). Base at L3
+  so failure lines (containing "failed") aren't stolen by stock rule 1002.
+-->
+<group name="pbs,proxmox,backup,">
+
+  <!-- Base at L3 (must outrank stock 1002 for lines containing "failed") -->
+  <rule id="100870" level="3">
+    <decoded_as>pbs-task</decoded_as>
+    <description>PBS task: $(pbs.task) $(pbs.worker) — $(pbs.status)</description>
+    <group>pbs,task,</group>
+  </rule>
+
+  <!-- Success: traced without alerting -->
+  <rule id="100875" level="1">
+    <if_sid>100870</if_sid>
+    <field name="pbs.status" type="pcre2">^OK$</field>
+    <description>PBS task OK: $(pbs.task) $(pbs.worker)</description>
+    <group>pbs,task,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Warnings / indeterminate (unknown): notable but not a hard failure -->
+  <rule id="100874" level="4">
+    <if_sid>100870</if_sid>
+    <field name="pbs.status" type="pcre2">^WARNINGS|^unknown$</field>
+    <description>PBS task WARNING/indeterminate: $(pbs.task) $(pbs.worker) — $(pbs.status)</description>
+    <group>pbs,task,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,nist_800_53_AU.6,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Any task ending in a real failure (not OK / WARNINGS / unknown) -->
+  <rule id="100871" level="7">
+    <if_sid>100870</if_sid>
+    <field name="pbs.status" type="pcre2">^(?!OK$)(?!WARNINGS)(?!unknown$).+</field>
+    <description>PBS task FAILED: $(pbs.task) $(pbs.worker) — $(pbs.status)</description>
+    <group>pbs,task,backup_failure,system_error,gpg13_4.3,gdpr_IV_35.7.d,tsc_A1.2,</group>
+  </rule>
+
+  <!-- Backup task failed: a snapshot did not complete -->
+  <rule id="100872" level="8">
+    <if_sid>100871</if_sid>
+    <field name="pbs.task" type="pcre2">^backup$</field>
+    <description>PBS BACKUP FAILED: $(pbs.worker) — $(pbs.status)</description>
+    <group>pbs,backup,backup_failure,system_error,pci_dss_10.6.1,gpg13_4.3,gdpr_IV_35.7.d,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Verify FAILED: a stored backup is CORRUPT — the key integrity alert -->
+  <rule id="100873" level="10">
+    <if_sid>100871</if_sid>
+    <match>verification failed</match>
+    <description>PBS VERIFY FAILED — stored backup CORRUPT: $(pbs.worker)</description>
+    <mitre>
+      <id>T1490</id>
+    </mitre>
+    <group>pbs,verify,backup_failure,pci_dss_10.6.1,pci_dss_11.4,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_SI.4,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>

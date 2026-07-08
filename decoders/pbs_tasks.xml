@@ -1,0 +1,22 @@
+<!--
+  Proxmox Backup Server task archive (/var/log/proxmox-backup/tasks/archive),
+  collected by the Wazuh agent on the PBS host. Each completed task appends one
+  raw line (no syslog header):
+    UPID:pbs1:PID:PSTART:IDX:STARTHEX:TASKTYPE:WORKERID:AUTHID: ENDHEX STATUS
+  e.g. UPID:pbs1:...:6A4E27F2:verify:atlas\x2dpbs\x3avm-520-...:bckp_user@pbs: 6A4E28B7 OK
+  STATUS is "OK", "WARNINGS: N", "unknown", or an error string (e.g.
+  "verification failed - ...", "marking used chunks failed - ..."). The
+  worker id escapes ':' as \x3a and '-' as \x2d, so there are no real colons
+  inside it — split on real ':'. Anchored on ^UPID:pbs so it never matches the
+  PVE journald task trail (which reads "<user> end task UPID:...").
+-->
+
+<decoder name="pbs-task">
+  <prematch type="pcre2">^UPID:pbs</prematch>
+</decoder>
+
+<decoder name="pbs-task-fields">
+  <parent>pbs-task</parent>
+  <regex type="pcre2">^UPID:\w+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(\w+):([^:]+):([^:]+): [0-9A-Fa-f]+ (.+)$</regex>
+  <order>pbs.task, pbs.worker, pbs.authid, pbs.status</order>
+</decoder>
