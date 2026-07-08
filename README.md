@@ -139,6 +139,22 @@ Decoders and rules for authentik's structlog JSON, collected through the Docker 
 - **Compliance tagging** on the audit rules: PCI DSS, GDPR, HIPAA, NIST 800-53, TSC
 - **MITRE ATT&CK**: T1078 (Valid Accounts), T1110 / T1110.001 (Brute Force), T1098 (Account Manipulation), T1595 (Active Scanning)
 
+### macOS endpoints (Unified Logging System)
+Native `macos` log format collection with a security-focused ULS query
+predicate pushed **centrally** through a dedicated agent group (no per-Mac
+configuration): the stock predicate (sudo, sshd, tccd, screen sharing,
+securityd sessions) extended with **MDM/ManagedClient** (Jamf-managed fleet),
+**Gatekeeper/syspolicy** (restricted to assessment/denied/XProtect/quarantine/
+malware messages — the `default` category logs every lookup), **XProtect**,
+**opendirectoryd** authentication, application firewall and package installs
+(`macos_uls.xml` + `macos_rules.xml`):
+
+- **MDM destructive command (EraseDevice/DeviceLock/RemoteWipe) → level 10** (T1561); configuration profile install/remove → level 5; other MDM activity traced at level 1
+- **XProtect malware detection/remediation → level 12**; **Gatekeeper assessment denied → level 8** (T1204.002)
+- opendirectoryd authentication failures → level 5 + local brute-force correlation (8+ in 4 min → level 10)
+- Decoder pattern note: ULS-predecoded events only match `<program_name>`-keyed decoders (same as stock `0580-macos_decoders.xml`) — a free-standing `<prematch>` decoder is never tried on them
+- Rule pattern note: when a stock generic rule (e.g. 2501 auth failure) wins the event, refine it with a **child rule scoped by a custom decoder field** instead of fighting the evaluation order
+
 ### Proxmox Backup Server (task integrity)
 Rules for the PBS task archive (`/var/log/proxmox-backup/tasks/archive`, one raw `UPID:…: <end> <status>` line per completed task — `pbs_tasks.xml` + `pbs_task_rules.xml`). Backup **integrity** is the point: completions are traced (OK at level 1), and the signal is failure:
 
@@ -293,6 +309,8 @@ cp rules/office365_extra_rules.xml /var/ossec/etc/rules/       # Office 365: noi
 cp rules/pve_access_rules.xml /var/ossec/etc/rules/            # Proxmox pveproxy Web/API access (101131-101135, on stock web-accesslog)
 cp rules/pve_task_rules.xml /var/ossec/etc/rules/              # Proxmox VE task trail (100860-100867)
 cp rules/pbs_task_rules.xml /var/ossec/etc/rules/              # Proxmox Backup Server task archive (100870-100875)
+cp decoders/macos_uls.xml /var/ossec/etc/decoders/             # macOS Unified Logging System (program_name-keyed)
+cp rules/macos_rules.xml /var/ossec/etc/rules/                 # macOS MDM/Gatekeeper/XProtect/auth (101150-101179)
 # Only if you have a FortiGate:
 cp rules/fortigate_rules.xml /var/ossec/etc/rules/
 ```
@@ -503,6 +521,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (**finished OK L3 — 100848**, error L8), CRON, qemu-ga, LibreNMS, chronyd |
 | 100860-100867 | Proxmox VE | Task trail with actor+result (vzdump OK L3 / FAILED L8, VM/CT lifecycle by user L3, snapshots L3, task errors L7, starts/housekeeping L1) |
 | 100870-100873, 100874-100875 | Proxmox Backup Server | Task archive: OK L1, warnings/unknown L4, task FAILED L7, backup FAILED L8, **VERIFY FAILED = stored backup corrupt L10** (T1490) |
+| 101150-101179 | macOS (ULS) | MDM activity L1 / profile change L5 / **destructive command L10** (T1561), Gatekeeper denied L8, **XProtect malware L12**, opendirectoryd auth fail L5 + brute force L10, app firewall L3, installs L3 |
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |

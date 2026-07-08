@@ -1,0 +1,71 @@
+<!--
+  Decoders for macOS Unified Logging System events collected by the Wazuh
+  agent's native `macos` log format (location=macos, query predicate pushed
+  centrally via the macOS agent group).
+  Astier Consulting - Jul 2026
+
+  IMPORTANT pattern note: ULS-predecoded events are only matched through
+  <program_name>-keyed decoders (same pattern as the stock
+  0580-macos_decoders.xml). A free-standing <prematch> decoder is never
+  tried on these events — hence one parent decoder per process family.
+
+  Message shape (after predecoding strips timestamp + program[pid]):
+    [subsystem:category] message
+    (library.dylib) [subsystem:category] message
+  The field extraction child is shared logic repeated per family:
+    macos.subsystem, macos.category, macos.event
+-->
+
+<!-- MDM client (Jamf-managed fleet): mdmclient + ManagedClient -->
+<decoder name="macos-mdmclient">
+  <program_name type="pcre2">^(?:mdmclient|ManagedClient)$</program_name>
+</decoder>
+
+<decoder name="macos-mdmclient-fields">
+  <parent>macos-mdmclient</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
+</decoder>
+
+<!-- Gatekeeper / execution policy -->
+<decoder name="macos-syspolicyd">
+  <program_name type="pcre2">^syspolicyd$</program_name>
+</decoder>
+
+<decoder name="macos-syspolicyd-fields">
+  <parent>macos-syspolicyd</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
+</decoder>
+
+<!-- XProtect (XProtectRemediator*, xprotectd...) -->
+<decoder name="macos-xprotect">
+  <program_name type="pcre2">^(?:XProtect|xprotect)</program_name>
+</decoder>
+
+<decoder name="macos-xprotect-fields">
+  <parent>macos-xprotect</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
+</decoder>
+
+<!-- Directory services (authentication) -->
+<decoder name="macos-opendirectoryd">
+  <program_name type="pcre2">^opendirectoryd$</program_name>
+</decoder>
+
+<decoder name="macos-opendirectoryd-fields">
+  <parent>macos-opendirectoryd</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
+</decoder>
+
+<!-- Application firewall: plain messages (no subsystem prefix) -->
+<decoder name="macos-socketfilterfw">
+  <program_name type="pcre2">^socketfilterfw$</program_name>
+</decoder>
+
+<!-- Package installs: "Installed ..." messages -->
+<decoder name="macos-installd">
+  <program_name type="pcre2">^installd$</program_name>
+</decoder>
