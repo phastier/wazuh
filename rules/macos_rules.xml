@@ -66,9 +66,21 @@
     <group>xprotect,</group>
   </rule>
 
+  <!-- XProtect Remediator periodic scan chatter: every ~6h XPR enumerates
+       its own plugins ("Found XProtect plugin", "Discovered remediator",
+       "Found remediator"). NOT detections — traced at L1. Lesson learned:
+       the binary names contain "Remediator", so a loose (?i)remediat
+       matcher turns the enumeration into a fake L12 storm (1200/day). -->
+  <rule id="101159" level="1">
+    <if_sid>101157</if_sid>
+    <field name="macos.event" type="pcre2">(?i)^(?:Found (?:XProtect plugin|remediator)|Discovered remediator|Ignoring|Skipping)</field>
+    <description>macOS XProtect: periodic scan/plugin enumeration</description>
+    <group>xprotect,</group>
+  </rule>
+
   <rule id="101158" level="12">
     <if_sid>101157</if_sid>
-    <field name="macos.event" type="pcre2">(?i)detect|malware|remediat|threat|infect</field>
+    <field name="macos.event" type="pcre2">(?i)\bdetected\b|\bthreat\b|\bmalware\b|\binfect|\beliminated\b|\bquarantin</field>
     <description>macOS XProtect: MALWARE detection/remediation — $(macos.event)</description>
     <mitre>
       <id>T1204.002</id>
@@ -118,6 +130,44 @@
     <decoded_as>macos-installd</decoded_as>
     <description>macOS installd: package event</description>
     <group>software_install,pci_dss_10.6.1,gdpr_IV_35.7.d,nist_800_53_AU.6,tsc_CC6.8,</group>
+  </rule>
+
+  <!-- ===== Jamf Protect (EDR) ===== -->
+  <rule id="101175" level="1">
+    <decoded_as>macos-jamfprotect</decoded_as>
+    <description>Jamf Protect: $(macos.category) activity</description>
+    <group>jamf_protect,</group>
+  </rule>
+
+  <rule id="101176" level="9">
+    <if_sid>101175</if_sid>
+    <field name="macos.event" type="pcre2">(?i)\bthreat\b|\bdetected\b|\bprevent(?:ed)?\b|\bblocked\b|malicious|\bquarantin</field>
+    <description>Jamf Protect: THREAT signal — $(macos.event)</description>
+    <mitre>
+      <id>T1204</id>
+    </mitre>
+    <group>jamf_protect,attack,pci_dss_11.4,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SI.3,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- ===== Jamf Pro agent (/var/log/jamf.log — policy execution trail) ===== -->
+  <rule id="101170" level="1">
+    <decoded_as>macos-jamf</decoded_as>
+    <description>Jamf Pro agent: $(jamf.event)</description>
+    <group>jamf,</group>
+  </rule>
+
+  <rule id="101171" level="3">
+    <if_sid>101170</if_sid>
+    <field name="jamf.event" type="pcre2">(?i)^Executing Policy</field>
+    <description>Jamf Pro: policy executed — $(jamf.event)</description>
+    <group>jamf,config_changed,pci_dss_10.6.1,gdpr_IV_35.7.d,nist_800_53_AU.6,tsc_CC6.8,</group>
+  </rule>
+
+  <rule id="101172" level="5">
+    <if_sid>101170</if_sid>
+    <field name="jamf.event" type="pcre2">(?i)error|failed|could not|unable to</field>
+    <description>Jamf Pro agent: ERROR — $(jamf.event)</description>
+    <group>jamf,system_error,gpg13_4.3,gdpr_IV_35.7.d,</group>
   </rule>
 
 </group>

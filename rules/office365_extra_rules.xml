@@ -92,11 +92,28 @@
     <group>office365,account_changed,pci_dss_10.2.5,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AC.6,tsc_CC6.8,</group>
   </rule>
 
-  <!-- ===== 4. Phishing / malware: keep L12, add tags + MITRE ===== -->
-  <rule id="91556" level="12" overwrite="yes">
+  <!-- ===== 4. Phishing / malware: severity by OUTCOME =====
+       Stock 91556 fires L12 on every RecordType 28 (ThreatIntelligence)
+       event — but most are mails already BLOCKED/quarantined by EOP
+       (defence worked: informational). L12 is reserved for threats that
+       actually REACHED a mailbox (DeliveryAction Delivered / moved by ZAP
+       post-delivery). Severity mapping is a Wazuh vendor default, not a
+       compliance-framework requirement — frameworks mandate logging and
+       review, outcome-based severity is the sane operational reading. -->
+  <rule id="91556" level="5" overwrite="yes">
     <if_sid>91532</if_sid>
     <field name="office365.RecordType" type="osregex">^28$</field>
-    <description>Office 365: phishing/malware event from Exchange Online Protection / Defender</description>
+    <description>Office 365: phishing/malware handled by EOP/Defender (blocked or quarantined)</description>
+    <mitre>
+      <id>T1566</id>
+    </mitre>
+    <group>office365,attack,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SI.3,nist_800_53_SI.4,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="101116" level="12">
+    <if_sid>91556</if_sid>
+    <field name="office365.DeliveryAction" type="pcre2">(?i)^Delivered$</field>
+    <description>Office 365: phishing/malware DELIVERED to mailbox ($(office365.Subject)) — user exposure</description>
     <mitre>
       <id>T1566</id>
     </mitre>

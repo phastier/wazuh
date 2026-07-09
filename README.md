@@ -150,6 +150,8 @@ malware messages — the `default` category logs every lookup), **XProtect**,
 (`macos_uls.xml` + `macos_rules.xml`):
 
 - **MDM destructive command (EraseDevice/DeviceLock/RemoteWipe) → level 10** (T1561); configuration profile install/remove → level 5; other MDM activity traced at level 1
+- **Jamf Protect** (EDR) families decoded (JamfProtect/JamfDaemon/security-extension): activity traced L1, threat signals → level 9; **Jamf Pro agent** `/var/log/jamf.log` (non-standard day-of-week timestamp → raw prematch decoder): policy execution L3, errors L5
+- **XProtect false-positive trap**: every ~6h XProtect Remediator *enumerates its own plugins* ("Found XProtect plugin", "Discovered remediator") — the binary names contain "Remediator", so a loose `remediat` matcher turns the enumeration into a fake L12 storm (1200/day). Enumeration is pinned at L1; L12 requires real detection words
 - **XProtect malware detection/remediation → level 12**; **Gatekeeper assessment denied → level 8** (T1204.002)
 - opendirectoryd authentication failures → level 5 + local brute-force correlation (8+ in 4 min → level 10)
 - Decoder pattern note: ULS-predecoded events only match `<program_name>`-keyed decoders (same as stock `0580-macos_decoders.xml`) — a free-standing `<prematch>` decoder is never tried on them
@@ -179,7 +181,7 @@ Supplementary rules on top of Wazuh's built-in Office 365 module (`office365_ext
 - **Admin security changes** (level 8): conditional-access policy, transport config/rules, anti-phish policy, org config — the settings an attacker weakens
 - **BEC / persistence** (level 10): mailbox **forwarding rules**, inbox rules, mailbox **delegation** (`Add-MailboxPermission`) — the classic Business Email Compromise footprint (MITRE T1114.003 / T1098.002)
 - **Privileged role assignment** (level 8), **bulk HardDelete** correlation (50+ in 5 min → level 8, possible evidence removal)
-- **Phishing / malware** (stock 91556): kept at level 12, retagged with MITRE T1566 and compliance groups
+- **Phishing / malware — severity by OUTCOME** (stock 91556 fires L12 on every ThreatIntelligence event, even mails already blocked): overwritten to **L5 when EOP/Defender handled it** (blocked/quarantined — the defence worked, informational) and escalated to **L12 only when the threat was actually DELIVERED to a mailbox** (101116). Severity mapping is a vendor default, not a framework requirement — frameworks mandate logging and review; outcome-based severity is the sane operational reading
 - **Compliance tagging** throughout (PCI DSS, GDPR, HIPAA, NIST 800-53, TSC); MITRE T1110/T1114/T1098/T1562/T1566/T1070
 
 ### Docker containers (resource & health)
@@ -521,13 +523,13 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | 100840-100858 | journald | ZFS zed (errors L9, burst L12), Proxmox backups (**finished OK L3 — 100848**, error L8), CRON, qemu-ga, LibreNMS, chronyd |
 | 100860-100867 | Proxmox VE | Task trail with actor+result (vzdump OK L3 / FAILED L8, VM/CT lifecycle by user L3, snapshots L3, task errors L7, starts/housekeeping L1) |
 | 100870-100873, 100874-100875 | Proxmox Backup Server | Task archive: OK L1, warnings/unknown L4, task FAILED L7, backup FAILED L8, **VERIFY FAILED = stored backup corrupt L10** (T1490) |
-| 101150-101179 | macOS (ULS) | MDM activity L1 / profile change L5 / **destructive command L10** (T1561), Gatekeeper denied L8, **XProtect malware L12**, opendirectoryd auth fail L5 + brute force L10, app firewall L3, installs L3 |
+| 101150-101179 | macOS (ULS) | MDM activity L1 / profile change L5 / **destructive command L10** (T1561), Gatekeeper denied L8, XProtect scan chatter L1 / **real malware detection L12**, opendirectoryd auth fail L5 + brute force L10, app firewall L3, installs L3, **Jamf Protect** activity L1 / threat L9, **Jamf Pro agent** (jamf.log) trail L1 / policy L3 / error L5 |
 | 100900-100910 | Stormshield | Traffic (allowed L1 / blocked L3), SSL (blocked L4), IPS alarm L6 / high-risk L10, auth L5, SSL-VPN L4, system, plugin |
 | 100911-100912 | Stormshield | DHCP (all verbs L1; **DHCPACK = who-is-connected L3**, IP/MAC/hostname extracted) |
 | 100913-100919 | Stormshield | Admin audit L5 / config change L8, IPsec VPN L4 / failure L8, ipsec/filter/auth stats L1 |
 | 100950-100959 | Synology | DSM sign-in L3 / failed L5 + brute force L10, share access L3, SMB file ops L1 + mass-deletion (ransomware tripwire) L10 (Time Machine paths excluded, 100966) |
 | 100960-100966 | Synology | Hyper Backup off-site: started L1, **finished successfully L3**, **failed L8**, version rotation L1 |
-| 91578, 91556 (overwrite) | Office 365 | MailItemsAccessed L5→L3 (noise), phishing/malware kept L12 + tags |
+| 91578, 91556 (overwrite) | Office 365 | MailItemsAccessed L5→L3 (noise), phishing/malware **by outcome**: EOP-blocked L5, **delivered to mailbox L12** (101116) |
 | 101100-101125 | Office 365 | Failed login L5 + brute force L10, mass mailbox access L10, admin security changes L8, BEC forwarding/delegation L10, role assignment L8, bulk HardDelete L8 |
 | 101131-101135 | Proxmox pveproxy | Web/API login L3, failed login L6 + brute force L10, mutating API call L4 (built on the stock web-accesslog decoder; UI polling stays stock 31108 L0) |
 | 101000-101003 | Authentik | Base + periodic chatter pinned to L0 (health checks, worker scheduling, router refresh) |

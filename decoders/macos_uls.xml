@@ -69,3 +69,30 @@
 <decoder name="macos-installd">
   <program_name type="pcre2">^installd$</program_name>
 </decoder>
+
+<!-- Jamf Protect (EDR): JamfProtect daemon, JamfDaemon, and the
+     com.jamf.protect.security-extension — same [subsystem:category] ULS
+     shape as the com.apple families. -->
+<decoder name="macos-jamfprotect">
+  <program_name type="pcre2">^(?:JamfProtect|JamfDaemon|com\.jamf\.protect[\w.-]*)$</program_name>
+</decoder>
+
+<decoder name="macos-jamfprotect-fields">
+  <parent>macos-jamfprotect</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
+</decoder>
+
+<!-- Jamf Pro agent log (/var/log/jamf.log). Its timestamp format
+     ("Thu Jul 09 11:03:42 host jamf[pid]: msg", day-of-week prefixed) is
+     NOT standard syslog: Wazuh predecoding extracts nothing, so this is a
+     raw-line prematch decoder (not program_name-keyed). -->
+<decoder name="macos-jamf">
+  <prematch type="pcre2">^\w{3} \w{3} [ \d]\d \d{2}:\d{2}:\d{2} \S+ jamf\[\d+\]: </prematch>
+</decoder>
+
+<decoder name="macos-jamf-fields">
+  <parent>macos-jamf</parent>
+  <regex type="pcre2">jamf\[\d+\]: (.+)$</regex>
+  <order>jamf.event</order>
+</decoder>
