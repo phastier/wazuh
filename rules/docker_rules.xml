@@ -56,4 +56,16 @@
     <description>Docker: Container $(container_name) is $(container_health_status)</description>
     <group>container_health,service_availability,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,tsc_A1.2,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
+
+  <!-- Noise: Docker HEALTHCHECK probes fire the stock exec rule 87907 at L3
+       in a loop (~8600/day). The probes are recognizable by their command:
+       "ak healthcheck" (authentik server), "pg_isready" (postgres),
+       "redis-cli ping" (redis), etc. Archive-only. A real interactive exec
+       (bash/sh with real commands) keeps L3. -->
+  <rule id="101186" level="0">
+    <if_sid>87907</if_sid>
+    <field name="docker.Action" type="pcre2">(?i)healthcheck|pg_isready|redis-cli|mysqladmin ping|nc -z</field>
+    <description>Docker: routine healthcheck probe — $(docker.Action)</description>
+    <group>docker,</group>
+  </rule>
 </group>

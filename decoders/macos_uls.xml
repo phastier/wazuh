@@ -16,9 +16,12 @@
     macos.subsystem, macos.category, macos.event
 -->
 
-<!-- MDM client (Jamf-managed fleet): mdmclient + ManagedClient -->
+<!-- MDM client (Jamf-managed fleet): mdmclient + ManagedClient, plus the
+     auxiliary MDM-managed daemons that log under subsystem
+     com.apple.ManagedClient (FileVault, application firewall config, Find My,
+     profiles tool). -->
 <decoder name="macos-mdmclient">
-  <program_name type="pcre2">^(?:mdmclient|ManagedClient)$</program_name>
+  <program_name type="pcre2">^(?:mdmclient|ManagedClient|FirewallService|fdesetup|findmydeviced|profiles)$</program_name>
 </decoder>
 
 <decoder name="macos-mdmclient-fields">
@@ -95,4 +98,33 @@
   <parent>macos-jamf</parent>
   <regex type="pcre2">jamf\[\d+\]: (.+)$</regex>
   <order>jamf.event</order>
+</decoder>
+
+<!-- Jamf binary via ULS (distinct from /var/log/jamf.log above): the jamf
+     agent also logs to the unified log as program_name "jamf" with the
+     [com.jamf.management.binary:cat] subsystem shape. -->
+<decoder name="macos-jamf-uls">
+  <program_name type="pcre2">^jamf$</program_name>
+</decoder>
+
+<decoder name="macos-jamf-uls-fields">
+  <parent>macos-jamf-uls</parent>
+  <regex type="pcre2">^(?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, jamf.event</order>
+</decoder>
+
+<!-- Catch-all for any remaining ULS event whose process name Wazuh could
+     NOT predecode (names with spaces/+ like "Self Service+ CLI" lose their
+     program_name) — this is the only case where a prematch decoder is
+     reached (events WITH a program_name never try prematch decoders).
+     Parses process + [subsystem:category] from the raw line so nothing
+     stays undecoded; classified at level 0 (archive only). -->
+<decoder name="macos-uls-orphan">
+  <prematch type="pcre2">\[\d+\]: (?:\([\w.]+\) )?\[[\w-]+(?:\.[\w-]+)+:[^\]]*\] </prematch>
+</decoder>
+
+<decoder name="macos-uls-orphan-fields">
+  <parent>macos-uls-orphan</parent>
+  <regex type="pcre2">\[\d+\]: (?:\([\w.]+\) )?\[([\w.-]+):([^\]]*)\] (.+)$</regex>
+  <order>macos.subsystem, macos.category, macos.event</order>
 </decoder>

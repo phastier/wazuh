@@ -1,12 +1,16 @@
 <!--
-  Description-only overrides of stock rules: surface the decoded user (and
-  source IP where available) directly in the alert description, so the alert
-  list is readable without opening each event.
-  Conditions, levels, MITRE ids and rule groups are copied VERBATIM from the
-  stock ruleset (0085-pam_rules.xml, 0095-sshd_rules.xml,
-  0495-proxmox-ve_rules.xml) — only <description> changes. The <group name>
-  sections mirror each stock file's group header. Review after Wazuh
-  upgrades in case upstream conditions move.
+  Overrides of stock rules — two purposes:
+   1. Description: surface the decoded user (and source IP where available)
+      in the alert description, so the alert list is readable without opening
+      each event. Conditions, MITRE ids and groups copied VERBATIM from the
+      stock ruleset (0085-pam_rules.xml, 0095-sshd_rules.xml,
+      0495-proxmox-ve_rules.xml).
+   2. Noise level: a few high-volume routine stock rules are lowered out of
+      the Threat Hunting default view (still fully traced/searchable) —
+      PAM session open/close L3->L1, and a scoped child silencing the SNMP
+      poller's sudo-to-root. The real auth signal keeps its level.
+  The <group name> sections mirror each stock file's group header. Review
+  after Wazuh upgrades in case upstream conditions move.
   PVE note: user extraction for non-@pam/@pve realms (authentik OIDC)
   requires decoders/pve_extra.xml.
   Astier Consulting - Jul 2026
@@ -14,7 +18,11 @@
 
 <group name="pam,syslog,">
 
-  <rule id="5501" level="3" overwrite="yes">
+  <!-- L3 -> L1: session open/close is routine (cron/systemd sessions for
+       root, thousands/day) — kept fully traced/searchable but out of the
+       Threat Hunting default view. The real auth signal (failures, first
+       sudo, ssh from new source) lives in other rules. -->
+  <rule id="5501" level="1" overwrite="yes">
     <if_sid>5500</if_sid>
     <match>session opened for user </match>
     <description>PAM: Login session opened for user $(dstuser).</description>
@@ -24,7 +32,7 @@
     <group>authentication_success,pci_dss_10.2.5,gpg13_7.8,gpg13_7.9,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
-  <rule id="5502" level="3" overwrite="yes">
+  <rule id="5502" level="1" overwrite="yes">
     <if_sid>5500</if_sid>
     <match>session closed for user </match>
     <description>PAM: Login session closed for user $(dstuser).</description>
@@ -68,6 +76,16 @@
       <id>T1548.003</id>
     </mitre>
     <group>pci_dss_10.2.5,pci_dss_10.2.2,gpg13_7.6,gpg13_7.8,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.6,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- Scoped noise: the SNMP poller (Debian-snmp) does sudo-to-root in a loop
+       (1000+/day). Archive-only for THIS user; every other sudo-to-root keeps
+       L3 via the parent 5402. -->
+  <rule id="101185" level="0">
+    <if_sid>5402</if_sid>
+    <match>Debian-snmp : </match>
+    <description>Successful sudo to ROOT by Debian-snmp (SNMP poller — routine).</description>
+    <group>sudo,</group>
   </rule>
 
 </group>
