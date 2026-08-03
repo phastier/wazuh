@@ -1,0 +1,33 @@
+<!-- ═══════════════════════════════════════════════════════════
+  lynis_rules.xml — Audits Lynis du parc (chantier durcissement,
+  INT-AC-2026-45). Source : /var/log/lynis/ac-lynis.json émis par
+  ac-lynis-audit (localfile json sur chaque agent).
+  IDs réservés : 101200-101209.
+═══════════════════════════════════════════════════════════ -->
+<group name="lynis,configuration_assessment,">
+
+  <!-- Audit exécuté : trace de base, indexée (visibilité + historique) -->
+  <rule id="101200" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="ac_lynis.hardening_index">\.+</field>
+    <description>Lynis : audit exécuté sur $(ac_lynis.hostname) — indice $(ac_lynis.hardening_index), $(ac_lynis.warnings_count) warning(s)</description>
+    <group>audit,pci_dss_2.2,nist_800_53_CM.6,tsc_CC7.1,</group>
+  </rule>
+
+  <!-- Warnings présents dans l audit -->
+  <rule id="101201" level="7">
+    <if_sid>101200</if_sid>
+    <field name="ac_lynis.warnings_count" type="pcre2">^[1-9][0-9]*$</field>
+    <description>Lynis : $(ac_lynis.warnings_count) warning(s) détecté(s) sur $(ac_lynis.hostname)</description>
+    <group>audit,pci_dss_2.2,nist_800_53_CM.6,tsc_CC7.1,</group>
+  </rule>
+
+  <!-- Échec du run Lynis lui-même -->
+  <rule id="101202" level="7">
+    <if_sid>101200</if_sid>
+    <field name="ac_lynis.lynis_rc" type="pcre2">^[1-9][0-9]*$</field>
+    <description>Lynis : le run d audit a retourné rc=$(ac_lynis.lynis_rc) sur $(ac_lynis.hostname)</description>
+    <group>audit,errors,</group>
+  </rule>
+
+</group>

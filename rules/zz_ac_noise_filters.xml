@@ -1,0 +1,34 @@
+<!-- ═══════════════════════════════════════════════════════════
+  ac_noise_filters.xml — Suppression de bruit a la source (niveau 0).
+  Chantier reduction du bruit SIEM (13/07/2026). Volume mesure avant
+  filtrage : 802 070 alertes/semaine, dont ~95 % sans valeur.
+
+  PRINCIPE : niveau 0 = evenement evalue puis ECARTE (ni indexe, ni
+  alerte). Reversible en une ligne. On ne touche NI aux decodeurs NI
+  aux regles d origine : ce qui est filtre reste decodable si besoin.
+
+  IDs reserves : 101300-101319.
+═══════════════════════════════════════════════════════════ -->
+<group name="ac_noise,">
+
+  <!-- ── DHCP : housekeeping interne dnsmasq de l UDM ──
+       On ECARTE uniquement la plomberie. RESTENT VISIBLES :
+         · 100322 attributions d IP (2 348/sem)
+         · 100321 epuisement de pool (773/sem, niveau 6)
+         · DHCPACK/REQUEST/OFFER/DISCOVER (813/sem)
+         · "not giving name" = conflit de nommage (2 333/sem — SIGNAL,
+           anomalie de config a corriger, surtout pas a masquer)
+       Gain : ~17 000 evenements/semaine, zero perte d information. -->
+  <rule id="101300" level="0">
+    <if_sid>100320</if_sid>
+    <match>Updating leases ::</match>
+    <description>[bruit] dnsmasq: rafraichissement periodique du fichier de baux</description>
+  </rule>
+
+  <rule id="101301" level="0">
+    <if_sid>100320</if_sid>
+    <match>hosts.d//leases - removed</match>
+    <description>[bruit] dnsmasq: relecture du fichier de baux</description>
+  </rule>
+
+</group>

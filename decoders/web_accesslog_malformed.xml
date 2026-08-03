@@ -1,10 +1,20 @@
 <!--
   Malformed nginx/Apache access-log entries that the stock web-accesslog
-  decoder ignores: empty request ("" 400) or binary payload (TLS handshake
-  sent to a plaintext port). Typical of Internet scanners probing a public
-  endpoint (e.g. an identity provider behind nginx).
-  The prematch requires an empty request or a \x escape so nothing is stolen
-  from the stock decoder.
+  decoder ignores. Typical of Internet scanners probing a public endpoint
+  (e.g. an identity provider behind nginx).
+
+  Three shapes are handled:
+    1. empty request        "" 400
+    2. binary payload       "\x16\x03\x01..."   (TLS handshake on a plaintext port)
+    3. single-token request "MGLNDD_203.0.113.7_443" 400
+
+  Shape 3 is a bare probe string carrying no method, path or protocol. It is
+  common enough to matter: 321 events in a 4-day census on a reference
+  deployment, none of them claimed by any decoder.
+
+  Every prematch requires something the stock decoder cannot accept — an empty
+  request, a \x escape, or a request containing no whitespace at all — so
+  nothing is stolen from it.
 -->
 
 <decoder name="web-accesslog-malformed">
@@ -15,6 +25,14 @@
 
 <decoder name="web-accesslog-malformed">
   <prematch type="pcre2">^\S+ - \S+ \[[^\]]+\] "\\x</prematch>
+  <regex type="pcre2">^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d{3}) (\d+)</regex>
+  <order>srcip, srcuser, http.date, http.request_raw, id, http.size</order>
+</decoder>
+
+<!-- Shape 3: a request token with no whitespace, so it can never be a valid
+     "METHOD path PROTOCOL" line and cannot collide with the stock decoder. -->
+<decoder name="web-accesslog-malformed">
+  <prematch type="pcre2">^\S+ - \S+ \[[^\]]+\] "[^"\s]+" \d{3} </prematch>
   <regex type="pcre2">^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d{3}) (\d+)</regex>
   <order>srcip, srcuser, http.date, http.request_raw, id, http.size</order>
 </decoder>

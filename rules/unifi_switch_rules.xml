@@ -1,13 +1,58 @@
 <!--
   UniFi switch (USW) rules for Wazuh
   Astier Consulting - https://www.astier-consulting.fr
-  Rule IDs: 100380 | Decoder: decoders/unifi_switch.xml
-  Decode-everything-readably: generic switch events show "daemon: message".
+  Rule IDs: 100380, 100385-100388 | Decoder: decoders/unifi_switch.xml
+
+  Decode-everything-readably. Two base rules, because a Wazuh field that was
+  never set renders LITERALLY as "$(field)" in the description — so the variant
+  without a component must not reference $(sw_component).
+
+    100380  base, with component      switch: LOOP_PROT: <message>
+    100385  base, without component   switch: Port:4 link up, Speed: 2500M
+    100386+ notable components raised above the base level.
+
+  ID range note: 100381-100384 are taken by unifi_rules.xml. Duplicate IDs do
+  not error out — Wazuh keeps one and silently drops the other, which is how a
+  whole message family can go missing. Check before allocating:
+      grep -rhoE 'rule id="1[0-9]{5}"' /var/ossec/etc/rules/ | sort | uniq -d
 -->
 <group name="unifi,switch,">
+
   <rule id="100380" level="3">
     <decoded_as>unifi-sw</decoded_as>
-    <description>UniFi switch [$(sw_daemon)]: $(sw_message)</description>
+    <field name="sw_component">\.+</field>
+    <description>UniFi switch [$(sw_component)]: $(sw_message)</description>
     <group>unifi,switch,</group>
   </rule>
+
+  <rule id="100385" level="3">
+    <decoded_as>unifi-sw</decoded_as>
+    <description>UniFi switch [$(sw_facility)]: $(sw_message)</description>
+    <group>unifi,switch,</group>
+  </rule>
+
+  <!-- Loop protection: a switching loop degrades or drops a whole segment. -->
+  <rule id="100386" level="10">
+    <if_sid>100380</if_sid>
+    <field name="sw_component">^LOOP_PROT$</field>
+    <description>UniFi switch: loop protection - $(sw_message)</description>
+    <group>unifi,switch,loop_protection,</group>
+  </rule>
+
+  <!-- 802.1X port authentication. -->
+  <rule id="100387" level="5">
+    <if_sid>100380</if_sid>
+    <field name="sw_component">^DOT1X$</field>
+    <description>UniFi switch: 802.1X - $(sw_message)</description>
+    <group>unifi,switch,authentication,</group>
+  </rule>
+
+  <!-- Spanning tree role change: the topology moved. -->
+  <rule id="100388" level="5">
+    <if_sid>100380</if_sid>
+    <field name="sw_component">^DOT1S$</field>
+    <description>UniFi switch: spanning tree - $(sw_message)</description>
+    <group>unifi,switch,stp,</group>
+  </rule>
+
 </group>

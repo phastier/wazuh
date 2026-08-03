@@ -1,0 +1,82 @@
+<!--
+  Housekeeping / low-signal program decoders
+  Astier Consulting - https://www.astier-consulting.fr
+
+  Purpose: reach full decoder coverage. Any journald or ULS line that no
+  decoder claims stays unstructured, and can also fall through to generic
+  OSSEC rules such as 1002 ("Unknown problem somewhere in the system") purely
+  because the text happens to contain "error" or "failed".
+
+  A 4-day census over ~3.3M events on a reference deployment found 40 programs
+  with no decoder at all. Most carry no security value on their own, but they
+  must still be *claimed* so that coverage can be measured and so that a new,
+  genuinely interesting message family stands out instead of hiding in a pile
+  of unclaimed noise.
+
+  Pattern used here is the repo's existing "program-only decoder": a
+  <program_name> selector and nothing else. It marks the event as decoded and
+  lets per-program rules be written later, without extracting fields that
+  nobody consumes yet.
+
+  <program_name> defaults to OS_Regex; type="pcre2" is required for
+  alternations and for escaping dots in script names.
+-->
+
+<!-- ═══ Linux distribution housekeeping ═══
+     Package management, filesystem maintenance, log daemons, account tooling.
+     NB: the stock ruleset covers `fwupd`, but the binary that actually logs is
+     `fwupdmgr` — 186 events over 4 days went unclaimed for that one letter. -->
+<decoder name="ac-linux-housekeeping">
+  <program_name type="pcre2">^(?:fwupdmgr|PackageKit|50-motd-news|fstrim|find|mdadm|xfs_scrub_all|rsyslogd|auditd|adduser|addgroup|crontab|dockerd|mariadbd|filebeat|lvm)$</program_name>
+</decoder>
+
+<!-- ═══ Proxmox VE / Backup Server auxiliary daemons ═══
+     NB: `pve_extra.xml` declares `pvepw-logger`, but the daemon is
+     `pvefw-logger` (pve FireWall logger). The transposed letters mean that
+     decoder never matched. Kept here rather than edited there so the fix is
+     visible in one place. -->
+<decoder name="ac-pve-auxiliary">
+  <program_name type="pcre2">^(?:spiceproxy|qmeventd|pvenode|pve-ha-crm|pve-ha-lrm|pvefw-logger|proxmox-daily-update|proxmox-backup-api)$</program_name>
+</decoder>
+
+<!-- ═══ Proxmox Datacenter Manager ═══
+     Separate product, separate binaries; the busiest is the RRD journal
+     commit, emitted every few minutes. -->
+<decoder name="ac-pdm">
+  <program_name type="pcre2">^(?:proxmox-datacenter-api|proxmox-datacenter-privileged-api|proxmox-datacenter-manager-daily-update)$</program_name>
+</decoder>
+
+<!-- ═══ macOS ManagedClient / ULS extras ═══
+     Same subsystem family as macos_uls.xml (com.apple.ManagedClient), but
+     these binaries were not in its selector. -->
+<decoder name="ac-macos-managedclient-extra">
+  <program_name type="pcre2">^(?:pkd|appstored|ScreenSharingSubscriber|taskgated-helper|adprivacyd|airportd)$</program_name>
+</decoder>
+
+<!-- ═══ Pi-hole FTL ═══
+     Resolver lifecycle and gravity updates. Worth claiming: an FTL restart is
+     a DNS outage on this parc's secondary resolvers. -->
+<decoder name="ac-pihole-ftl">
+  <program_name type="pcre2">^pihole-FTL$</program_name>
+</decoder>
+
+<!-- ═══ Operational scripts ═══
+     Locally authored timers and helpers. `ac-lynis-audit` also emits a
+     structured JSON file consumed separately (see lynis rules); the journald
+     line is a human-readable duplicate. -->
+<decoder name="ac-ops-scripts">
+  <program_name type="pcre2">^(?:ac-lynis-audit|tech2pihole-sync\.py|authentik-pgbackup\.sh|wazuh-ioc|wazuh-retention|wazuh-index-retention|ac-prefix-audit)$</program_name>
+</decoder>
+
+<!-- ═══ Application services ═══
+     Systemd unit of the public website; logs its own request handling. -->
+<decoder name="ac-app-services">
+  <program_name type="pcre2">^(?:astier-consulting-com|astier-consulting-fr)$</program_name>
+</decoder>
+
+<!-- ═══ Misc ═══
+     `zebra` is FRR's routing daemon on the SDN fabric; `root` appears when a
+     cron job logs through `logger` without a tag. -->
+<decoder name="ac-misc-journald">
+  <program_name type="pcre2">^(?:zebra|root)$</program_name>
+</decoder>

@@ -10,6 +10,33 @@ The second commitment is **compliance-first tagging**: every security-relevant r
 
 Developed and tested on **Wazuh 4.14.3** by [Astier Consulting](https://www.astier-consulting.fr) — Apple/IT consulting with 30 years of datacenter management experience.
 
+## Contributing — anonymisation is mandatory
+
+**This repository is public.** Decoders and rules are built from real syslog
+captured on live networks, so every example must be scrubbed before it is
+committed. This is a founding principle of the project, not a preference.
+
+Never commit:
+
+- **MAC addresses** of real equipment — use the RFC 7042 documentation range
+  `00-00-5E-00-53-xx` (e.g. `00005e005301`)
+- **IP addresses** of real hosts — use RFC 5737 (`192.0.2.0/24`) or RFC 3849
+  (`2001:db8::/32`)
+- hostnames, serial numbers, account names, delegated IPv6 prefixes, or site
+  identifiers
+
+Equipment **model names** (`USW-Pro-Max-48`, `U7-Pro-Wall`) are fine: they
+identify a product, not a unit. Truncating a real value is not anonymisation —
+replace it.
+
+Suggested pre-commit sweep:
+
+```bash
+grep -rnoE '\b[0-9a-f]{12}\b' --include='*.xml' --include='*.md' .
+grep -rnoE '\b([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b' --include='*.xml' --include='*.md' .
+grep -rnoE '\b(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[01]))\.' --include='*.xml' --include='*.md' .
+```
+
 ## Why this project?
 
 When we set out to integrate our network infrastructure into Wazuh, we found that:
@@ -20,6 +47,7 @@ When we set out to integrate our network infrastructure into Wazuh, we found tha
 - Fortinet built-in decoders work well, but **without tuning, mDNS/Bonjour noise drowns out real alerts** — especially in Apple-heavy environments
 - **Stormshield SNS** firewalls emit a rich `key="value"` syslog — traffic decisions, IPS alarms, IPsec/SSL VPN, admin audit, DHCP — that **no community Wazuh decoder** handles, so every event landed undecoded
 - **Synology DSM** can forward its Log Center to a syslog server, but there are **no community decoders** for what it sends — sign-ins, shared-folder access and the per-file SMB transfer log all landed as unclassified noise, when a NAS is precisely where your backups (a ransomware's first target) live
+- **Nothing measured decode coverage.** A decoder that matches but extracts nothing looks healthy — the event is "decoded" — yet its rule renders as `UniFi switch []:` and the message is lost. On a reference deployment that silent failure affected **99.9% of switch events**, hiding loop-protection and 802.1X messages for months
 - Documentation on Wazuh PCRE2 limitations was scattered and incomplete
 
 This repository provides production-tested decoders and rules that actually work, along with noise suppression tuning for real-world mixed environments.
@@ -77,6 +105,45 @@ UniFi's syslog config has two independent knobs (*Settings → System → Loggin
 | IDS/IPS threats, firewall, DHCP, device/software updates, UPS | USW-Flex / UPS Tower MCA informs, port links (`unifi_mca.xml`) | |
 
 **Takeaway**: the station lifecycle (connect/disconnect/roam), admin audit, IDS and firewall are on the *always-available* controller log — safe to run with Debug off. Turn **Debug Logs** on only when you specifically want the **UDM host's own admin audit** (sudo/IPS-update/systemd), and accept its verbosity. Verbose device logging is worth it for the AP-kernel security signals (802.11 auth) but is the bulk of the volume.
+
+### Full decode coverage — and how it is measured
+
+The goal of this ruleset is that **every event reaching the manager is claimed by
+a decoder**. Two failure modes stand in the way, and only the first is obvious:
+
+1. **No decoder at all.** The event keeps its pre-decoded fields and nothing more.
+   It can also fall through to generic rules such as `1002` ("Unknown problem
+   somewhere in the system") purely because its text contains *error* or *failed*.
+2. **A decoder that matches but extracts nothing.** Far more insidious: coverage
+   metrics count the event as decoded, while the rule renders `[]` where a field
+   should be. This is what a stale regex assumption produces.
+
+`ac_housekeeping.xml` closes the first gap for the long tail of infrastructure
+daemons — package management, filesystem maintenance, Proxmox VE/PBS/PDM
+auxiliaries, macOS ManagedClient helpers, Pi-hole FTL — using the repo's
+**program-only decoder** pattern: a `<program_name>` selector and nothing else.
+It marks the event decoded without inventing fields nobody consumes, and it
+cannot steal events from a more specific decoder.
+
+Two long-standing typos surfaced while doing this, both of which had silently
+disabled a decoder since it was written:
+
+| Declared | Actual binary |
+|---|---|
+| `fwupd` | `fwupdmgr` |
+| `pvepw-logger` | `pve**fw**-logger` (pve **F**ire**W**all logger) |
+
+**Watch for duplicate rule IDs.** Wazuh does not error on them — it keeps one
+definition and silently drops the other, which is how a whole message family can
+disappear. Before allocating a range:
+
+```bash
+grep -rhoE 'rule id="[0-9]+"' /var/ossec/etc/rules/*.xml | sort | uniq -d
+```
+
+Restrict the glob to `*.xml`: Wazuh ignores other extensions, so a `.bak` left in
+the rules directory is inert — but a naive `grep -r` will report it as a
+duplicate and send you chasing a problem that does not exist.
 
 ### Fortinet FortiGate
 Supplementary rules on top of Wazuh's built-in FortiGate decoders (which work well). The focus here is **noise suppression and VPN monitoring** — in environments with Apple devices, Bonjour/mDNS generates thousands of deny logs per minute that bury real security events.
@@ -383,7 +450,7 @@ On the appliance, add a syslog profile under **Configuration → Notifications �
   <connection>syslog</connection>
   <port>514</port>
   <protocol>udp</protocol>
-  <allowed-ips>10.0.0.1/32</allowed-ips>   <!-- the SN's real source IP -->
+  <allowed-ips>198.51.100.1/32</allowed-ips>   <!-- the SN's real source IP -->
 </remote>
 ```
 > **Firewall self-traffic through IPsec**: if the SN reaches Wazuh over a *policy-based* IPsec tunnel, its **self-originated** syslog must be sourced from an IP inside the tunnel's local network, or it never enters the tunnel. Confirm the received source with `sudo tcpdump -ni any udp port 514` on the Wazuh host, then pin `<allowed-ips>` to that exact `/32` — otherwise `wazuh-remoted` silently drops packets whose source isn't whitelisted.
@@ -542,7 +609,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 ### MikroTik Firewall
 | Field | Content | Example |
 |-------|---------|---------|
-| `srcip` | Source IP | `192.168.1.100` |
+| `srcip` | Source IP | `192.0.2.100` |
 | `dstip` | Destination IP | `8.8.8.8` |
 | `srcport` | Source port | `54321` |
 | `dstport` | Destination port | `443` |
@@ -552,7 +619,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 ### UniFi WiFi (enriched)
 | Field | Content | Example |
 |-------|---------|---------|
-| `srcip` | Client IP | `192.168.1.100` |
+| `srcip` | Client IP | `192.0.2.100` |
 | `srcmac` | Client MAC | `aa:bb:cc:dd:ee:01` |
 | `dstuser` | Device alias | `iPhone de Jean` |
 | `extra_data` | Access Point | `AP-Bureau-RDC` |
@@ -584,7 +651,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | Field | Content | Example |
 |-------|---------|---------|
 | `dstuser` | Client alias | `Living-Room-TV` |
-| `srcip` | Client IP | `192.168.20.37` |
+| `srcip` | Client IP | `192.0.2.37` |
 | `srcmac` | Client MAC | `aa:bb:cc:dd:ee:02` |
 | `switch_name` | Switch/AP it connected to | `USW-Flex-Office` |
 | `switch_port` | Port number | `2` |
@@ -626,7 +693,7 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | Field | Content | Example |
 |-------|---------|---------|
 | `extra_data` | UPS device name | `UPS Bureau Cave` |
-| `srcip` | UPS IP address | `192.168.0.40` |
+| `srcip` | UPS IP address | `192.0.2.40` |
 | `data` | Battery remaining | `93.0%` |
 | `action` | Full message | `UPS Bureau Cave has lost AC power...` |
 
@@ -659,14 +726,14 @@ if $fromhost-ip == '<MIKROTIK_IP>' then ?MikroTikFormat
 | `port` / `status` | Switch port and link state | `2` / `down` |
 | `status` (UPS) | Inform HTTP status | `503` |
 | `mca.rc` / `mca.reason` | Inform failure code / reason | `7` / `Server Busy` |
-| `url` | Controller inform URL | `http://192.168.0.2:8080/inform` |
+| `url` | Controller inform URL | `http://192.0.2.2:8080/inform` |
 
 ### MikroTik DHCP bindings
 | Field | Content | Example |
 |-------|---------|---------|
 | `dhcp.server` | DHCP server instance | `dhcp1` |
 | `action` | Binding operation | `assigned` / `deassigned` |
-| `srcip` / `srcmac` / `srchost` | Bound IP / MAC / hostname | `192.168.0.33` / `00:24:E4:...` / `laptop` |
+| `srcip` / `srcmac` / `srchost` | Bound IP / MAC / hostname | `192.0.2.33` / `00:24:E4:...` / `laptop` |
 | `dhcp.option` / `dhcp.value` | Debug dump option | `Host-Name` / `"Mac"` |
 | `iface` / `status` / `speed` | Link transitions | `sfp-sfpplus11` / `down` / `10G` |
 
@@ -690,13 +757,13 @@ Wazuh's built-in FortiGate decoder extracts all native fields: `srcip`, `dstip`,
 ### Stormshield SNS
 | Field | Content | Example |
 |-------|---------|---------|
-| `srcip` / `dstip` / `srcport` / `dstport` / `protocol` | Connection 5-tuple | `10.0.0.24` / `203.0.113.67` / `56594` / `443` / `https` |
+| `srcip` / `dstip` / `srcport` / `dstport` / `protocol` | Connection 5-tuple | `198.51.100.24` / `203.0.113.67` / `56594` / `443` / `https` |
 | `fw.action` | Firewall verdict (dynamic field) | `pass` / `block` |
 | `srcuser` | Authenticated user (SSL-VPN / admin) | `jdoe` |
 | `logtype` | SNS log family | `filter` / `alarm` / `vpn` / `server` |
 | `sns.msg` | Event message | `OpenVPN connection detected` |
 | `alarm.id` / `alarm.class` / `alarm.risk` | IPS alarm | `118` / `protocol` / `10` |
-| `dhcp.event` / `dhcp.ip` / `dhcp.mac` / `dhcp.hostname` | DHCP lease (asset inventory) | `DHCPACK` / `10.0.0.69` / `00:11:22:33:44:bb` / `Laptop-01` |
+| `dhcp.event` / `dhcp.ip` / `dhcp.mac` / `dhcp.hostname` | DHCP lease (asset inventory) | `DHCPACK` / `198.51.100.69` / `00:11:22:33:44:bb` / `Laptop-01` |
 | `http.method` / `http.status` | Protocol plugin (HTTP) | `GET` / `200` |
 | `srcintf` / `dstintf` | Interfaces | `lan` / `wan` |
 
@@ -768,16 +835,16 @@ Contributions welcome if you discover additional event IDs!
 Use `wazuh-logtest` to validate decoders and rules:
 ```bash
 # MikroTik DROP
-echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203.0.113.1 DST:192.168.1.100 PROTO:TCP SPT:12345 DPT:443 (ACK PSH)' | /var/ossec/bin/wazuh-logtest
+echo 'Feb 25 10:30:00 MikroTik DROP : IPv4 FORWARD IN:ether1 OUT:bridge1 SRC:203.0.113.1 DST:192.0.2.100 PROTO:TCP SPT:12345 DPT:443 (ACK PSH)' | /var/ossec/bin/wazuh-logtest
 
 # UniFi WiFi Connected
-echo 'Feb 25 11:04:19 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.1.85|400|WiFi Client Connected|1|UNIFIcategory=Client Devices UNIFIconnectedToDeviceName=AP-Bureau UNIFIclientAlias=iPhone UNIFIclientIp=192.168.1.100 UNIFIclientMac=aa:bb:cc:dd:ee:01 UNIFIwifiName=MySSID UNIFIwifiBand=6e UNIFIWiFiRssi=-45 UNIFInetworkName=LAN' | /var/ossec/bin/wazuh-logtest
+echo 'Feb 25 11:04:19 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.1.85|400|WiFi Client Connected|1|UNIFIcategory=Client Devices UNIFIconnectedToDeviceName=AP-Bureau UNIFIclientAlias=iPhone UNIFIclientIp=192.0.2.100 UNIFIclientMac=aa:bb:cc:dd:ee:01 UNIFIwifiName=MySSID UNIFIwifiBand=6e UNIFIWiFiRssi=-45 UNIFInetworkName=LAN' | /var/ossec/bin/wazuh-logtest
 
 # UniFi OS Admin Accessed
 echo 'Mar 13 16:00:00 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi OS|5.0.16|1000|Admin Accessed UniFi OS|1|UNIFIhost=Host UNIFIadmin=Admin msg=Admin accessed the UniFi OS' | /var/ossec/bin/wazuh-logtest
 
 # UniFi Config Modified (audit)
-echo 'Mar 14 08:16:22 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.2.93|546|Config Modified|5|src=192.168.0.39 UNIFIcategory=Audit UNIFIsettingsChanges=debug: true UNIFIsettingsSection=System UNIFIadmin=Admin msg=Admin made a change in System settings' | /var/ossec/bin/wazuh-logtest
+echo 'Mar 14 08:16:22 UDM-Pro-Max-AC CEF:0|Ubiquiti|UniFi Network|10.2.93|546|Config Modified|5|src=192.0.2.39 UNIFIcategory=Audit UNIFIsettingsChanges=debug: true UNIFIsettingsSection=System UNIFIadmin=Admin msg=Admin made a change in System settings' | /var/ossec/bin/wazuh-logtest
 
 # FortiGate mDNS (should be suppressed - level 0)
 echo 'date=2026-02-25 time=13:00:00 devname="fortigate" devid="FGT123" logid="0001000014" type="traffic" subtype="local" level="notice" srcip=fe80::1 dstip=ff02::fb action="deny" service="udp/5353"' | /var/ossec/bin/wazuh-logtest
@@ -804,7 +871,7 @@ echo 'Jul  1 10:06:47 AP-Office 9c05d6000001,U7-Pro-Wall-8.7.9+19401: kernel: wl
 echo 'UPS-Office 847848000001,UPS TOWER-1.5.0.378: MCA: HTTP Status = 503, content_length = 0' | /var/ossec/bin/wazuh-logtest
 
 # MikroTik DHCP binding (level 3)
-echo 'Jul  1 00:33:20 router dhcp1 assigned 192.168.0.33 for 00:24:E4:51:0D:F8 laptop' | /var/ossec/bin/wazuh-logtest
+echo 'Jul  1 00:33:20 router dhcp1 assigned 192.0.2.33 for 00:00:5E:00:53:05 laptop' | /var/ossec/bin/wazuh-logtest
 
 # Scanner probe on a public endpoint (level 5)
 echo '203.0.113.66 - - [01/Jul/2026:14:33:39 +0200] "" 400 0 "-" "-"' | /var/ossec/bin/wazuh-logtest
@@ -813,13 +880,13 @@ echo '203.0.113.66 - - [01/Jul/2026:14:33:39 +0200] "" 400 0 "-" "-"' | /var/oss
 echo 'Jun 30 14:50:31 pve zed[851820]: eid=6743 class=io pool='"'"'rpool'"'"' size=8192 offset=839904612352 priority=0 err=6 flags=0x200080 bookmark=259:128:0:11611' | /var/ossec/bin/wazuh-logtest
 
 # Stormshield SNS: blocked traffic (level 3)
-echo 'id=firewall time="2026-07-06 13:44:52" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:44:52" pri=5 confid=01 slotlevel=2 ruleid=29 rulename="rule_2" srcif="Ethernet1" srcifname="lan" ipproto=udp dstif="Ethernet0" dstifname="wan" proto=dns_udp src=10.0.0.61 srcport=40638 srcportname=ephemeral_fw_udp srcmac=00:11:22:33:44:66 dst=198.51.100.1 dstport=53 dstportname=dns_udp dstname=resolver.example ipv=4 sent=0 rcvd=0 duration=0.00 action=block logtype="filter"' | /var/ossec/bin/wazuh-logtest
+echo 'id=firewall time="2026-07-06 13:44:52" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:44:52" pri=5 confid=01 slotlevel=2 ruleid=29 rulename="rule_2" srcif="Ethernet1" srcifname="lan" ipproto=udp dstif="Ethernet0" dstifname="wan" proto=dns_udp src=198.51.100.61 srcport=40638 srcportname=ephemeral_fw_udp srcmac=00:11:22:33:44:66 dst=198.51.100.1 dstport=53 dstportname=dns_udp dstname=resolver.example ipv=4 sent=0 rcvd=0 duration=0.00 action=block logtype="filter"' | /var/ossec/bin/wazuh-logtest
 
 # Stormshield SNS: high-risk IPS alarm (level 10)
-echo 'id=firewall time="2026-07-06 13:45:10" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:09" pri=1 confid=01 slotlevel=2 ruleid=93 rulename="rule_1d" srcif="Ethernet1" srcifname="lan" ipproto=tcp proto=ssl src=10.0.0.20 srcport=64127 dst=203.0.113.61 dstport=443 ipv=4 action=block msg="Invalid SSL packet (Unknown SSL protocol)" class=protocol classification=0 alarmid=118 target=dst risk=10 logtype="alarm"' | /var/ossec/bin/wazuh-logtest
+echo 'id=firewall time="2026-07-06 13:45:10" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:09" pri=1 confid=01 slotlevel=2 ruleid=93 rulename="rule_1d" srcif="Ethernet1" srcifname="lan" ipproto=tcp proto=ssl src=198.51.100.20 srcport=64127 dst=203.0.113.61 dstport=443 ipv=4 action=block msg="Invalid SSL packet (Unknown SSL protocol)" class=protocol classification=0 alarmid=118 target=dst risk=10 logtype="alarm"' | /var/ossec/bin/wazuh-logtest
 
 # Stormshield SNS: DHCPACK — who is connected (level 3, IP/MAC/hostname extracted)
-echo 'id=firewall time="2026-07-06 13:45:51" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:51" pri=6 service=dhcp msg="DHCPACK on 10.0.0.69 to 00:11:22:33:44:bb (Laptop-01) via igc6" logtype="system"' | /var/ossec/bin/wazuh-logtest
+echo 'id=firewall time="2026-07-06 13:45:51" fw="SN000TESTFW00000" tz=+0200 startime="2026-07-06 13:45:51" pri=6 service=dhcp msg="DHCPACK on 198.51.100.69 to 00:11:22:33:44:bb (Laptop-01) via igc6" logtype="system"' | /var/ossec/bin/wazuh-logtest
 ```
 
 ## Tested environment

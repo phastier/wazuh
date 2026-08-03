@@ -2,7 +2,7 @@
   UniFi access points (U7 family): "kernel:" messages carry NO pid, so they
   escape the unifi-ap decoder (unifi_ap.xml) whose prematch requires prog[pid].
   Content seen by decoders (hostname already consumed by the pre-decoder):
-  "9c05d6d99715,U7-Pro-Wall-8.7.9+19401: kernel: ..."
+  "00005e005304,U7-Pro-Wall-8.7.9+19401: kernel: ..."
   Families: DHCP-SM (per-client DHCP state machine), STA_TRACKER (DNS timeouts,
   roaming), 802.11 auth/assoc (real security value), VLAN tag failures, and a
   generic wlan fallback.

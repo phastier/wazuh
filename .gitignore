@@ -5,3 +5,4 @@ __pycache__/
 # Never commit real or anonymised production corpora — keep them out of the repo
 *corpus*.txt
 leak_markers.txt
+.DS_Store

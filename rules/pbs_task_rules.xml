@@ -18,7 +18,7 @@
   </rule>
 
   <!-- Success: traced without alerting -->
-  <rule id="100875" level="1">
+  <rule id="100875" level="3">
     <if_sid>100870</if_sid>
     <field name="pbs.status" type="pcre2">^OK$</field>
     <description>PBS task OK: $(pbs.task) $(pbs.worker)</description>
