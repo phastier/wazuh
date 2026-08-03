@@ -43,15 +43,47 @@
 
 <group name="syslog,sshd,">
 
+  <!-- Stock 5715 matches ^Accepted, which also catches the LogLevel VERBOSE
+       key-lookup trace emitted BEFORE authentication completes:
+
+         sshd-session[123]: Accepted key ED25519 SHA256:... found at /home/u/.ssh/authorized_keys
+
+       That line carries neither user nor source, and OpenSSH emits it TWICE per
+       connection — so a single login produced three authentication_success
+       alerts, two of them empty. Measured on a reference deployment: 870 traces
+       against 434 real logins in one day, i.e. two thirds of the
+       authentication audit trail was false. The defect is in the stock rule;
+       interpolating $(srcip) in the description is only what made it visible.
+
+       The discriminator is " for ": every real success reads
+       "Accepted <method> for <user> from <ip>", while the trace reads
+       "Accepted key <type> SHA256:...". That is stable across OpenSSH auth
+       methods, unlike enumerating publickey|password|keyboard-interactive.
+
+       NOTE: srcip cannot be used here. Wazuh treats it as a *static* field and
+       rejects <field name="srcip"> with "Field 'srcip' is static" — the rule
+       file then fails to load entirely.
+
+       LogLevel VERBOSE is deliberate here (CIS/Lynis recommend it: it records
+       the key fingerprint used). The fix belongs in the rule, not in sshd. -->
   <rule id="5715" level="3" overwrite="yes">
     <if_sid>5700</if_sid>
-    <match>^Accepted|authenticated.$</match>
+    <regex type="pcre2">^Accepted \S+ for |authenticated\.$</regex>
     <description>sshd: authentication success — user $(dstuser) from $(srcip).</description>
     <mitre>
       <id>T1078</id>
       <id>T1021</id>
     </mitre>
     <group>authentication_success,gdpr_IV_32.2,gpg13_7.1,gpg13_7.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,pci_dss_10.2.5,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <!-- The key-lookup trace itself: claimed and silenced, so it neither inflates
+       the authentication trail nor falls through to a generic rule. -->
+  <rule id="101330" level="0">
+    <if_sid>5700</if_sid>
+    <match>^Accepted key </match>
+    <description>[noise] sshd: public key found in authorized_keys (pre-authentication trace)</description>
+    <group>authentication_success,</group>
   </rule>
 
 </group>
