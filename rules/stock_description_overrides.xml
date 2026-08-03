@@ -142,3 +142,92 @@
   </rule>
 
 </group>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+  Web 4xx / 5xx — the stock wording carries no context at all.
+
+  "Web server 400 error code." tells an analyst nothing: not the status, not
+  the method, not the path, not the source. On a public endpoint that rule
+  fires thousands of times a day, so the description is the only thing most
+  people ever read — the fields are there, they were simply never used.
+
+  The web-accesslog decoder provides id (status), protocol (which actually
+  holds the HTTP *method*), url and srcip. Matching logic, correlation
+  parameters, MITRE ids and compliance groups are reproduced verbatim from
+  0245-web_rules.xml — only <description> changes.
+═══════════════════════════════════════════════════════════════════ -->
+<group name="web,accesslog,">
+
+  <rule id="31101" level="5" overwrite="yes">
+    <if_sid>31100</if_sid>
+    <id>^4</id>
+    <description>Web: HTTP $(id) — $(protocol) $(url) from $(srcip).</description>
+    <group>attack,pci_dss_6.5,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SA.11,nist_800_53_SI.4,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="31120" level="5" overwrite="yes">
+    <if_sid>31100</if_sid>
+    <id>^50</id>
+    <description>Web: HTTP $(id) server error — $(protocol) $(url) from $(srcip).</description>
+  </rule>
+
+  <rule id="31121" level="4" overwrite="yes">
+    <if_sid>31120</if_sid>
+    <id>^501</id>
+    <description>Web: HTTP 501 not implemented — $(protocol) $(url) from $(srcip).</description>
+  </rule>
+
+  <rule id="31122" level="5" overwrite="yes">
+    <if_sid>31120</if_sid>
+    <id>^500</id>
+    <description>Web: HTTP 500 internal error — $(protocol) $(url) from $(srcip).</description>
+    <group>system_error,</group>
+  </rule>
+
+  <rule id="31123" level="4" overwrite="yes">
+    <if_sid>31120</if_sid>
+    <id>^503</id>
+    <description>Web: HTTP 503 service unavailable — $(protocol) $(url) from $(srcip).</description>
+  </rule>
+
+  <!-- Correlation rules: srcip is the grouping key, so it is always sound.
+       The method and path come from the event that closed the window — hence
+       "last:" rather than implying they describe the whole burst. -->
+  <rule id="31151" level="10" frequency="14" timeframe="90" overwrite="yes">
+    <if_matched_sid>31101</if_matched_sid>
+    <same_source_ip />
+    <description>Web: repeated HTTP 4xx from $(srcip) — last $(protocol) $(url).</description>
+    <mitre>
+      <id>T1595.002</id>
+    </mitre>
+    <group>web_scan,recon,pci_dss_6.5,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SA.11,nist_800_53_SI.4,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="31161" level="10" frequency="14" timeframe="120" overwrite="yes">
+    <if_matched_sid>31121</if_matched_sid>
+    <same_source_ip />
+    <description>Web: repeated HTTP 501 from $(srcip) — last $(protocol) $(url).</description>
+    <mitre>
+      <id>T1595.002</id>
+    </mitre>
+    <group>web_scan,recon,pci_dss_6.5,pci_dss_11.4,gdpr_IV_35.7.d,nist_800_53_SA.11,nist_800_53_SI.4,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="31162" level="10" frequency="14" timeframe="120" overwrite="yes">
+    <if_matched_sid>31122</if_matched_sid>
+    <same_source_ip />
+    <description>Web: repeated HTTP 500 from $(srcip) — last $(protocol) $(url).</description>
+    <group>system_error,pci_dss_6.5,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SA.11,nist_800_53_AU.6,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+  <rule id="31163" level="10" frequency="14" timeframe="120" overwrite="yes">
+    <if_matched_sid>31123</if_matched_sid>
+    <same_source_ip />
+    <description>Web: repeated HTTP 503 from $(srcip) — last $(protocol) $(url).</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>web_scan,recon,pci_dss_6.5,pci_dss_11.4,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SA.11,nist_800_53_SI.4,nist_800_53_AU.6,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+  </rule>
+
+</group>
