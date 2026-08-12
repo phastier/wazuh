@@ -77,4 +77,16 @@
     <group>unifi,ap_kernel,wifi,</group>
   </rule>
 
+  <!-- Kernel xmit-recursion guard on a VAP: the driver detects a frame
+       re-entering the transmit path of the interface that is emitting it
+       (typically a client multicast frame hairpinned by intra-BSS relay)
+       and drops it. Harmless by design; constant background noise when
+       multicast-to-unicast conversion is disabled. Traced, not alerted. -->
+  <rule id="100759" level="1">
+    <if_sid>100750</if_sid>
+    <field name="message" type="pcre2">^Dead loop on virtual device</field>
+    <description>WiFi: kernel dead-loop guard dropped a hairpinned frame</description>
+    <group>unifi,ap_kernel,wifi,</group>
+  </rule>
+
 </group>
