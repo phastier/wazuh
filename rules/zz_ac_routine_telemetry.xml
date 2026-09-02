@@ -39,7 +39,10 @@
   <!-- Rootcheck "Trojaned version" GENERIC signature on stock Debian/Ubuntu
        shadow/coreutils binaries: documented false positive (the 2015-era
        generic strings match legitimate builds). Scoped to the exact binaries
-       and the Generic signature — any other trojan detection stays level 7. -->
+       and the Generic signature — any other trojan detection stays level 7.
+       COMPENSATING CONTROL: these binaries live under /bin and /usr/bin,
+       both covered by syscheck (FIM) — real tampering still alerts (550/554).
+       REVERT: delete this rule (one line) to restore stock behaviour. -->
   <rule id="101309" level="0">
     <if_sid>510</if_sid>
     <match>file '/bin/chsh'|file '/bin/chown'|file '/usr/bin/chfn'|file '/usr/bin/chgrp'|file '/usr/bin/chsh'</match>
