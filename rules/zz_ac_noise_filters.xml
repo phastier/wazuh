@@ -31,4 +31,38 @@
     <description>[bruit] dnsmasq: relecture du fichier de baux</description>
   </rule>
 
+  <!-- ── Bornes Wi-Fi : comptabilite radio interne (wevent) ──
+       Mesure du 01/09/2026 : la regle generique 100368 produit 28 281
+       alertes/jour, reparties equitablement sur les six bornes. Un tiers
+       est de la gestion de ressource radio (802.11k/RRM) que la borne se
+       raconte a elle-meme : balayage de canaux, annonce de voisins,
+       armement du moniteur. Aucune valeur de securite.
+
+       Le filtrage au niveau du controleur ne l atteint PAS : ces lignes
+       viennent du syslog emis directement par les bornes.
+
+       On ECARTE uniquement la comptabilite radio. RESTENT VISIBLES :
+         · 100369 association d un client Wi-Fi (qui se connecte)
+         · wevent.ubnt_custom_event (EVENT_STA_IP : bail d un client)
+         · sta_join / sta_leave, WPA, RADIUS, MLME
+         · tout le reste de 100368
+       Gain : ~73 000 evenements/semaine, zero perte d information. -->
+  <rule id="101302" level="0">
+    <if_sid>100368</if_sid>
+    <match>wevent.rrm_scan()</match>
+    <description>[bruit] borne Wi-Fi: balayage de canal (RRM)</description>
+  </rule>
+
+  <rule id="101303" level="0">
+    <if_sid>100368</if_sid>
+    <match>wevent.neighbor_tick_handler()</match>
+    <description>[bruit] borne Wi-Fi: annonce periodique de voisinage (RRM)</description>
+  </rule>
+
+  <rule id="101304" level="0">
+    <if_sid>100368</if_sid>
+    <match>wevent.neighbor_monitor_arm</match>
+    <description>[bruit] borne Wi-Fi: armement du moniteur de voisinage (RRM)</description>
+  </rule>
+
 </group>
