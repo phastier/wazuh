@@ -38,8 +38,10 @@
     <group>unifi,ap_kernel,wifi,dns,</group>
   </rule>
 
-  <!-- VLAN assignment failure for a station: segmentation issue -->
-  <rule id="100754" level="4">
+  <!-- VLAN assignment failure for a station. Level 4 -> 0 on 2026-09-02:
+       measured as pure repetitive telemetry (~580/day, same AP/station,
+       INT-AC-2026-60); still archived. Revert to 4 if segmentation work resumes. -->
+  <rule id="100754" level="0">
     <if_sid>100750</if_sid>
     <field name="vlan.tag" type="pcre2">.+</field>
     <description>WiFi: failed to assign VLAN $(vlan.tag) to station $(station.mac) ($(status))</description>

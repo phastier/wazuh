@@ -1,0 +1,50 @@
+<!-- ═══════════════════════════════════════════════════════════
+  zz_ac_routine_telemetry.xml — routine telemetry silenced at rule level.
+  Session "reduction a la source" 2026-09-02 (INT-AC-2026-60). Principle
+  identical to zz_ac_noise_filters.xml: level 0 = evaluated then discarded
+  (still archived by logall_json), one-line revert, original rules and
+  decoders untouched. IDs reserved: 101305-101312.
+
+  Measured before (7 days of alerts):
+    100380 DHCP_SNP counters/plumbing ~69 000, associations ~6 000
+    510 rootcheck: /dev/.lxc container-runtime files + Debian "Trojaned"
+    generic-signature false positives ~8 500
+═══════════════════════════════════════════════════════════ -->
+<group name="ac_noise,">
+
+  <!-- Keep DHCP snooping ASSOCIATIONS visible (hostname->binding = client
+       presence trace), silence the rest of DHCP_SNP (periodic counters:
+       "Time Diff", "rxFlag", "rx"). Order matters: specific rule first. -->
+  <rule id="101305" level="3">
+    <if_sid>100380</if_sid>
+    <field name="sw_component">^DHCP_SNP$</field>
+    <match>update hostname</match>
+    <description>UniFi switch DHCP snooping: client binding update — $(sw_message)</description>
+    <group>unifi,switch,dhcp,</group>
+  </rule>
+  <rule id="101306" level="0">
+    <if_sid>100380</if_sid>
+    <field name="sw_component">^DHCP_SNP$</field>
+    <description>[bruit] UniFi switch DHCP snooping: periodic counters</description>
+  </rule>
+
+  <!-- Rootcheck: files created by the LXC container runtime under /dev —
+       structural on every LXC guest, never actionable. -->
+  <rule id="101308" level="0">
+    <if_sid>510</if_sid>
+    <match>/dev/.lxc</match>
+    <description>[bruit] rootcheck: LXC runtime files under /dev (structural on containers)</description>
+  </rule>
+
+  <!-- Rootcheck "Trojaned version" GENERIC signature on stock Debian/Ubuntu
+       shadow/coreutils binaries: documented false positive (the 2015-era
+       generic strings match legitimate builds). Scoped to the exact binaries
+       and the Generic signature — any other trojan detection stays level 7. -->
+  <rule id="101309" level="0">
+    <if_sid>510</if_sid>
+    <match>file '/bin/chsh'|file '/bin/chown'|file '/usr/bin/chfn'|file '/usr/bin/chgrp'|file '/usr/bin/chsh'</match>
+    <regex>Trojaned version of</regex>
+    <description>[bruit] rootcheck: generic-signature FP on stock Debian binaries</description>
+  </rule>
+
+</group>

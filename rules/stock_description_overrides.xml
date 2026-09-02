@@ -230,4 +230,22 @@
     <group>web_scan,recon,pci_dss_6.5,pci_dss_11.4,pci_dss_10.6.1,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_SA.11,nist_800_53_SI.4,nist_800_53_AU.6,tsc_CC6.6,tsc_CC7.1,tsc_CC8.1,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
   </rule>
 
+
+  <!-- dpkg routine package states, L7 -> L3 (2026-09-02, INT-AC-2026-60):
+       install/half-configured are the normal apt lifecycle; the audit value
+       lives in the trace (kept: alerts L3 + archives), not in the triage
+       feed (>= 6). Conditions and groups VERBATIM from 0020-syslog_rules.xml. -->
+  <rule id="2902" level="3" overwrite="yes">
+    <if_sid>2900</if_sid>
+    <field name="dpkg_status">^status installed$</field>
+    <description>New dpkg (Debian Package) installed.</description>
+    <group>config_changed,pci_dss_10.6.1,pci_dss_10.2.7,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC7.2,tsc_CC7.3,tsc_CC6.8,tsc_CC8.1,</group>
+  </rule>
+  <rule id="2904" level="3" overwrite="yes">
+    <if_sid>2900</if_sid>
+    <field name="dpkg_status">^status half-configured$</field>
+    <description>Dpkg (Debian Package) half configured.</description>
+    <group>config_changed,pci_dss_10.6.1,pci_dss_10.2.7,gpg13_4.10,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.6,nist_800_53_AU.14,tsc_CC7.2,tsc_CC7.3,tsc_CC6.8,tsc_CC8.1,</group>
+  </rule>
+
 </group>
