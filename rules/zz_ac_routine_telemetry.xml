@@ -14,7 +14,9 @@
 
   <!-- Keep DHCP snooping ASSOCIATIONS visible (hostname->binding = client
        presence trace), silence the rest of DHCP_SNP (periodic counters:
-       "Time Diff", "rxFlag", "rx"). Order matters: specific rule first. -->
+       "Time Diff", "rxFlag", "rx"). Siblings are NOT first-match: the last
+       matching child wins (proven by logtest 02/09), hence the explicit
+       negate on 101306. -->
   <rule id="101305" level="3">
     <if_sid>100380</if_sid>
     <field name="sw_component">^DHCP_SNP$</field>
@@ -25,6 +27,7 @@
   <rule id="101306" level="0">
     <if_sid>100380</if_sid>
     <field name="sw_component">^DHCP_SNP$</field>
+    <match negate="yes">update hostname</match>
     <description>[bruit] UniFi switch DHCP snooping: periodic counters</description>
   </rule>
 
